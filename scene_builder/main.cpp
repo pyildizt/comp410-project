@@ -14,9 +14,11 @@
 typedef vec4  color4;
 typedef vec4  point4;
 
+bool right_click_holding = false;
+bool right_click_released_once = false;
+
 const int num_vertices_for_cube = 36;
 
-int chosen_color_index;
 float speed = 0.05; 
 float camera_speed = 0.05;
 float scale_amount = 0.00;
@@ -27,9 +29,6 @@ float inital_z_placement = -2.8;
 point4 points_cube[num_vertices_for_cube];
 color4 colors_cube[num_vertices_for_cube];
 
-point4 points_frame_cube[num_vertices_for_cube];
-color4 colors_frame_cube[num_vertices_for_cube];
-
 vec3 object_coordinates(0.3, 0.2, inital_z_placement);
 const vec3 placement_frame(0.0, 0.0, inital_z_placement);
 vec3 object_scale(1.0, 1.0, 1.0);
@@ -37,8 +36,6 @@ vec3 object_scale(1.0, 1.0, 1.0);
 vec3 camera_coordinates(0.0, 0.0, -2.0);
 vec3 camera_front(0.0f, 0.0f, -1.0f);
 vec3 camera_up(0.0f, 1.0f, 0.0f);
-
-bool first_mouse = true;
 
 // Initialize mouse position as the middle of the screen
 double last_mouse_pos_x = SCREEN_WIDTH / 2.0;
@@ -53,14 +50,14 @@ double lastX =  512 / 2.0;
 double lastY =  512 / 2.0;
 double fov   =  45.0f;
 
+double last_yaw = yaw;
+double last_pitch = pitch;
+
 mat4 model, view, projection;
 GLuint  Model, View, Projection;
 
-GLuint vao[3];
+GLuint vao[2];
 GLuint cube_buffer;
-GLuint sphere_buffer;
-GLuint bunny_buffer;
-GLuint cube_frame_buffer;
 
 // Array of rotation angles (in degrees) for each coordinate axis
 enum { Xaxis = 0, Yaxis = 1, Zaxis = 2, NumAxes = 3 };
@@ -77,40 +74,6 @@ point4 cube_vertices[8] = {
     point4( -radius,  radius, -radius, 1.0 ),
     point4(  radius,  radius, -radius, 1.0 ),
     point4(  radius, -radius, -radius, 1.0 )
-};
-
-// RGBA colors
-color4 colors_array[10] = {
-    color4( 1.0, 0.0, 0.0, 1.0 ),  // red
-    color4( 1.0, 1.0, 0.0, 1.0 ),  // yellow
-    color4( 0.0, 1.0, 0.0, 1.0 ),  // green
-    color4( 0.0, 0.0, 1.0, 1.0 ),  // blue
-    color4( 1.0, 0.0, 1.0, 1.0 ),  // magenta
-    color4( 1.0, 1.0, 1.0, 1.0 ),  // white
-    color4( 0.0, 1.0, 1.0, 1.0 ),  // cyan
-    color4( 0.0, 0.0, 0.0, 1.0 ),  // black
-    color4( 0.3, 0.3, 0.3, 1.0 ),  // gray
-    color4( 1.0, 0.5, 0.0, 1.0 )   // orange
-};
-
-color4 vertex_colors_for_frame_cube[6] = {
-    color4( 1.0, 1.0, 1.0, 1.0 ),  // front side
-    color4( 0.5, 0.5, 0.5, 1.0 ),  // right side
-    color4( 0.4, 0.4, 0.4, 1.0 ),  // bottom side
-    color4( 0.8, 0.8, 0.8, 1.0 ),  // upper side
-    color4( 0.6, 0.6, 0.6, 1.0 ),  // back side
-    color4( 0.5, 0.5, 0.5, 1.0 )   // left side
-};
-
-point4 frame_cube_vertices[8] = {
-    point4( -frame_cube_half_side_length, -frame_cube_half_side_length,  frame_cube_half_side_length, 1.0 ),
-    point4( -frame_cube_half_side_length,  frame_cube_half_side_length,  frame_cube_half_side_length, 1.0 ),
-    point4(  frame_cube_half_side_length,  frame_cube_half_side_length,  frame_cube_half_side_length, 1.0 ),
-    point4(  frame_cube_half_side_length, -frame_cube_half_side_length,  frame_cube_half_side_length, 1.0 ),
-    point4( -frame_cube_half_side_length, -frame_cube_half_side_length, -frame_cube_half_side_length, 1.0 ),
-    point4( -frame_cube_half_side_length,  frame_cube_half_side_length, -frame_cube_half_side_length, 1.0 ),
-    point4(  frame_cube_half_side_length,  frame_cube_half_side_length, -frame_cube_half_side_length, 1.0 ),
-    point4(  frame_cube_half_side_length, -frame_cube_half_side_length, -frame_cube_half_side_length, 1.0 )
 };
 
 // quad generates two triangles for each face and assigns colors_cube to the vertices
@@ -136,36 +99,6 @@ void create_cube()
     quad( 6, 5, 1, 2 );
     quad( 4, 5, 6, 7 );
     quad( 5, 4, 0, 1 );
-
-    // create cube colors
-    std::fill_n(colors_cube, num_vertices_for_cube, colors_array[chosen_color_index]);
-}
-
-int index_frame = 0;
-int color_index = 0;
-void frame_quad( int a, int b, int c, int d )
-{
-    int lst[] = {a, b, c, a, c, d};
-
-    for (int i=0; i<6; i++)
-    {
-        points_frame_cube[index_frame+i] = frame_cube_vertices[lst[i]];
-        colors_frame_cube[index_frame+i] = vertex_colors_for_frame_cube[color_index];
-    }
-    index_frame += 6;
-    color_index++;
-}
-
-// generate the frame cube (the room)
-void color_frame_cube_function()
-{
-    index_frame = 0;
-    frame_quad( 1, 0, 3, 2 );
-    frame_quad( 2, 3, 7, 6 );
-    frame_quad( 3, 0, 4, 7 );
-    frame_quad( 6, 5, 1, 2 );
-    frame_quad( 4, 5, 6, 7 );
-    frame_quad( 5, 4, 0, 1 );
 }
 
 // create objects, vertex arrays and buffers
@@ -176,31 +109,11 @@ void init()
     glUseProgram(program);
 
     // Create vertex array objects
-    glGenVertexArrays(4, vao);
+    glGenVertexArrays(2, vao);
 
-    // cube frame 
-    color_frame_cube_function();
-
-    glBindVertexArray(vao[0]);
-    glGenBuffers(1, &cube_frame_buffer);
-    glBindBuffer(GL_ARRAY_BUFFER, cube_frame_buffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(points_frame_cube) + sizeof(colors_frame_cube),NULL, GL_STATIC_DRAW);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(points_frame_cube), points_frame_cube);
-    glBufferSubData(GL_ARRAY_BUFFER, sizeof(points_frame_cube),sizeof(colors_frame_cube), colors_frame_cube);
-
-    // frame cube attribute object
-    GLuint vPosition_frame_cube = glGetAttribLocation(program, "vPosition");
-    glEnableVertexAttribArray(vPosition_frame_cube);
-    glVertexAttribPointer(vPosition_frame_cube, 4, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
-
-    GLuint vColor_frame_cube = glGetAttribLocation(program, "vColor");
-    glEnableVertexAttribArray(vColor_frame_cube);
-    glVertexAttribPointer(vColor_frame_cube, 4, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(sizeof(points_frame_cube)));
-
-    // create cube buffer object
     create_cube();
 
-    glBindVertexArray(vao[1]);
+    glBindVertexArray(vao[0]);
     glGenBuffers(1, &cube_buffer);
     glBindBuffer(GL_ARRAY_BUFFER, cube_buffer);
     glBufferData(GL_ARRAY_BUFFER, sizeof(points_cube) + sizeof(colors_cube), NULL, GL_STATIC_DRAW);
@@ -230,9 +143,18 @@ void init()
     glUniformMatrix4fv(Projection, 1, GL_TRUE, projection);
 
     glEnable( GL_DEPTH_TEST );
-    glClearColor( 0.5, 0.5, 0.5, 1.0 ); // same color as frame cube sides 
+    glClearColor( 1.0, 1.0, 1.0, 1.0 ); 
 }
 
+void draw_object()
+{
+
+}
+
+void draw_selected_object()
+{
+    
+}
 
 void display(void)
 {
@@ -268,30 +190,32 @@ void display(void)
     glUniformMatrix4fv(View, 1, GL_TRUE, view);
 
     // Draw cube being moved
-    glBindVertexArray(vao[1]);
+    glBindVertexArray(vao[0]);
+    glBindBuffer(GL_ARRAY_BUFFER, cube_buffer);
+
+    // Draw solid object
+    std::fill_n(colors_cube, num_vertices_for_cube, color4(0.8, 0.8, 0.8, 1.0));
+    glBufferSubData(GL_ARRAY_BUFFER, sizeof(points_cube), sizeof(colors_cube), colors_cube);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    glDrawArrays(GL_TRIANGLES, 0, num_vertices_for_cube);
+
+    // Draw same object with wireframe
+    std::fill_n(colors_cube, num_vertices_for_cube, color4(0.0, 0.0, 0.0, 1.0));
+    glBufferSubData(GL_ARRAY_BUFFER, sizeof(points_cube), sizeof(colors_cube), colors_cube);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     glDrawArrays(GL_TRIANGLES, 0, num_vertices_for_cube);
 
 
     // Generate different model-view matrix for all the stationary objects
-    mat4 model2 = Translate(placement_frame);
-                    //* LookAt(camera_coordinates, camera_coordinates + camera_front, camera_up);
-    glUniformMatrix4fv(Model, 1, GL_TRUE, model2);
+    // mat4 model2 = Translate(placement_frame);
+    //                 //* LookAt(camera_coordinates, camera_coordinates + camera_front, camera_up);
+    // glUniformMatrix4fv(Model, 1, GL_TRUE, model2);
 
-    // Draw cube frame
-    glBindVertexArray(vao[0]);
-    glDrawArrays(GL_TRIANGLES, 0, num_vertices_for_cube);
+    // // Draw cube frame
+    // glBindVertexArray(vao[0]);
+    // glDrawArrays(GL_TRIANGLES, 0, num_vertices_for_cube);
 
     glFlush();
-}
-
-void change_color()
-{
-    // create cube colors
-    std::fill_n(colors_cube, num_vertices_for_cube, colors_array[chosen_color_index]);
-
-    // bind cube buffer and change colors array
-    glBindBuffer(GL_ARRAY_BUFFER, cube_buffer);
-    glBufferSubData(GL_ARRAY_BUFFER, sizeof(points_cube), sizeof(colors_cube), colors_cube);
 }
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
@@ -300,13 +224,6 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     {
         case GLFW_KEY_ESCAPE: //quit
             exit(EXIT_SUCCESS);
-            break;
-        case GLFW_KEY_C: //change color
-            if (action == GLFW_PRESS || action == GLFW_REPEAT) 
-            {
-                chosen_color_index = (chosen_color_index + 1)%10;
-                change_color();
-            }
             break;
 
         // WASD and Mouse for camera movement
@@ -424,25 +341,26 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 {
-    if (action == GLFW_PRESS) {
-        switch (button)
+    if ((action == GLFW_PRESS || action == GLFW_REPEAT) && button == GLFW_MOUSE_BUTTON_RIGHT)
+    {
+        right_click_holding = true;
+        right_click_released_once = false;
+    }
+    else if (action == GLFW_RELEASE && button == GLFW_MOUSE_BUTTON_RIGHT)
+    {
+        right_click_holding = false;
+        if (!right_click_released_once)
         {
-            case GLFW_MOUSE_BUTTON_LEFT: 
-                // TODO: To choose object: add picking
-                break;
+            last_yaw = yaw;
+            last_pitch = pitch;
         }
+        right_click_released_once = true;
+        
     }
 }
 
 void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
 {
-    if (first_mouse)
-    {
-        last_mouse_pos_x = xposIn;
-        last_mouse_pos_y = yposIn;
-        first_mouse = false;
-    }
-
     // Current mouse position is (xposIn, yposIn) 
     // We need the previous mouse position so that 
     // we can take the difference to know how the mouse moved
@@ -453,8 +371,16 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
     last_mouse_pos_x = xposIn;
     last_mouse_pos_y = yposIn;
        
-    yaw += x_pos_diff;
-    pitch -= y_pos_diff;
+    if (right_click_released_once)
+    {
+        yaw = last_yaw + x_pos_diff;
+        pitch = last_pitch - y_pos_diff;
+    }
+    else
+    {
+        yaw += x_pos_diff;
+        pitch -= y_pos_diff;
+    }
 
     // make sure that when pitch is out of bounds, screen doesn't get flipped
     if (pitch > 89.0f)
@@ -462,12 +388,15 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
     if (pitch < -89.0f)
         pitch = -89.0f;
   
-    vec3 front;
-    front.x = cos(yaw * (M_PI / 180.0)) * cos(pitch * (M_PI / 180.0));
-    front.y = sin(pitch * (M_PI / 180.0));
-    front.z = sin(yaw * (M_PI / 180.0)) * cos(pitch * (M_PI / 180.0));
-
-    camera_front = normalize(front);       
+    if (right_click_holding)
+    {
+        vec3 front;
+        front.x = cos(yaw * (M_PI / 180.0)) * cos(pitch * (M_PI / 180.0));
+        front.y = sin(pitch * (M_PI / 180.0));
+        front.z = sin(yaw * (M_PI / 180.0)) * cos(pitch * (M_PI / 180.0));
+        camera_front = normalize(front);       
+    }
+        
 }
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
