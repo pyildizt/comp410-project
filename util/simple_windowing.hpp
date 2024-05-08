@@ -5,12 +5,13 @@
 
 typedef enum { ABSOLUTE, PERCENT, RATIO } scale_type;
 
-typedef struct elastic_value {
+class elastic_value {
+
+public:
   float value;
   scale_type type;
 
-public:
-  float get_absolute(float parent_absolute, const struct elastic_value *other) {
+  float get_absolute(float parent_absolute, const elastic_value *other) {
     switch (type) {
     case ABSOLUTE:
       return value;
@@ -24,17 +25,23 @@ public:
     }
     return 0.0;
   }
-} e_val;
 
-struct subwindow {
-  e_val width;
-  e_val height;
-  e_val xoffset;
-  e_val yoffset;
-  int z_index;
-  struct subwindow *parent;
+  elastic_value(float value, scale_type type) : value(value), type(type) {}
+};
+
+class subwindow {
+  elastic_value width;
+  elastic_value height;
+  elastic_value xoffset;
+  elastic_value yoffset;
+  subwindow *parent;
 
 public:
+  subwindow(elastic_value width, elastic_value height, elastic_value xoffset,
+            elastic_value yoffset, subwindow *parent)
+      : width(width), height(height), xoffset(xoffset), yoffset(yoffset),
+        parent(parent) {}
+
   float get_absolute_width() {
     if (parent == nullptr) {
       return width.value;
@@ -76,6 +83,41 @@ public:
            y < (aheight + y_offset);
   }
 
+  mat4 get_scale_matrix() {
+    mat4 parent_mat;
+    float parent_width;
+    float parent_height;
+    if (parent == nullptr) {
+      parent_mat = identity();
+      parent_width = 1;
+      parent_height = 1;
+    } else {
+      parent_mat = parent->get_scale_matrix();
+      parent_width = parent->get_absolute_width();
+      parent_height = parent->get_absolute_height();
+    }
+    mat4 transform = Scale(vec3(get_absolute_width() / parent_width,
+                                get_absolute_height() / parent_height, 1));
+    return transform * parent_mat;
+  }
+
+  mat4 get_translate_matrix() {
+    mat4 parent_mat;
+    if (parent == nullptr) {
+      parent_mat = identity();
+    } else {
+      parent_mat = parent->get_translate_matrix();
+    }
+    mat4 transform = Translate(vec3(get_x_offset(), get_y_offset(), 1));
+    return transform * parent_mat;
+  }
+
+  mat4 get_transform_matrix() {
+    mat4 translate = get_translate_matrix();
+    mat4 scale = get_scale_matrix();
+    return scale * translate;
+  }
+  /*
   mat4 get_transform_matrix() {
     mat4 parent_mat;
     float parent_width;
@@ -93,7 +135,7 @@ public:
                      Scale(vec3(get_absolute_width() / parent_width,
                                 get_absolute_height() / parent_height, 1));
     return transform * parent_mat;
-  }
+  }*/
 };
 
 #endif

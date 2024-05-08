@@ -4,6 +4,7 @@
 #include "imgui_impl_opengl3.h"
 #include "load_model.hpp"
 #include "mat.h"
+#include "simple_windowing.hpp"
 #include <GL/gl.h>
 #include <algorithm>
 #include <cmath>
@@ -27,6 +28,22 @@ enum axis { Rx, Ry, Rz };
 #define AXIS_STR(x) ((x == Rx) ? "Rx" : (x == Ry) ? "Ry" : "Rz")
 /******************************************************************/
 //---------------------------------------------------------------------------
+
+subwindow main_window(
+  elastic_value(512, ABSOLUTE),
+  elastic_value(512, ABSOLUTE),
+  elastic_value(0, ABSOLUTE),
+  elastic_value(0, ABSOLUTE),
+  nullptr);
+
+subwindow object_window(
+  elastic_value(70, PERCENT),
+  elastic_value(100, PERCENT),
+  elastic_value(0, ABSOLUTE),
+  elastic_value(0, ABSOLUTE),
+  &main_window);
+
+
 
 /**
  * Camera Stuff
@@ -162,19 +179,19 @@ void display(bool fake) {
                  GL_STATIC_DRAW);
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vec4) * len, vertices);
     free(vertices);
-    if(!fake){
-    glBufferSubData(GL_ARRAY_BUFFER, sizeof(vec4) * len, sizeof(vec4) * len,
-                    normals);
-    }else{
+    if (!fake) {
+      glBufferSubData(GL_ARRAY_BUFFER, sizeof(vec4) * len, sizeof(vec4) * len,
+                      normals);
+    } else {
       // if fake, instead of normals, put unique colors
-      vec4* ucolors = (vec4*)calloc(len,sizeof(vec4));
-      for(int i = 0; i < len / 3; i++){
-        ucolors[i*3] = INT_TO_UNIQUE_COLOR(i);
-        ucolors[(i*3)+1] = INT_TO_UNIQUE_COLOR(i);
-        ucolors[(i*3)+2] = INT_TO_UNIQUE_COLOR(i);
+      vec4 *ucolors = (vec4 *)calloc(len, sizeof(vec4));
+      for (int i = 0; i < len / 3; i++) {
+        ucolors[i * 3] = INT_TO_UNIQUE_COLOR(i);
+        ucolors[(i * 3) + 1] = INT_TO_UNIQUE_COLOR(i);
+        ucolors[(i * 3) + 2] = INT_TO_UNIQUE_COLOR(i);
       }
       glBufferSubData(GL_ARRAY_BUFFER, sizeof(vec4) * len, sizeof(vec4) * len,
-                    ucolors);
+                      ucolors);
       free(ucolors);
     }
     glBufferSubData(GL_ARRAY_BUFFER, sizeof(vec4) * len * 2,
@@ -190,13 +207,13 @@ void display(bool fake) {
     auto light = vec4(0.0, 2.0, 0.0, 1.0);
     glUniform4fv(lightPosition, 1, ci * light);
     glUniform1f(modelShininess, main_model.material.shininess);
-    if(!fake){
-    glUniform1f(modelIsFakeDisplay, 0);
-        glUniform1i(modelIsEdge, 1);
-    }else{
+    if (!fake) {
+      glUniform1f(modelIsFakeDisplay, 0);
+      glUniform1i(modelIsEdge, 1);
+    } else {
       glUniform1f(modelIsFakeDisplay, 1);
-          glUniform1i(modelIsEdge, 0);
-}
+      glUniform1i(modelIsEdge, 0);
+    }
     glEnableVertexAttribArray(modelVPosition);
     glVertexAttribPointer(modelVPosition, 4, GL_FLOAT, GL_FALSE, 0,
                           BUFFER_OFFSET(0));
@@ -210,7 +227,6 @@ void display(bool fake) {
     glVertexAttribPointer(
         modelVindex, 1, GL_FLOAT, GL_FALSE, 0,
         BUFFER_OFFSET((sizeof(vec4) * len * 2) + (sizeof(GLfloat) * len)));
-
 
     glDrawArrays(GL_TRIANGLES, 0, MODEL_NUM_VERTICES);
   }
@@ -283,29 +299,28 @@ void scroll_callback(GLFWwindow *window, double xoffset, double yoffset) {
   }
 }
 void mouse_key_callback(GLFWwindow *window, int button, int action, int mods) {
-    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE) {
-      int width, height;
-      glfwGetWindowSize(window, &width, &height);
-      double xpos, ypos;
-      glfwGetCursorPos(window, &xpos, &ypos);
-      if (xpos > width - UI_WIDTH)
-        return;
-      
-      // draw with unique colors
-      display(true);
+  if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE) {
+    int width, height;
+    glfwGetWindowSize(window, &width, &height);
+    double xpos, ypos;
+    glfwGetCursorPos(window, &xpos, &ypos);
+    if (xpos > width - UI_WIDTH)
+      return;
 
-      unsigned char data[4];
-      glReadPixels(xpos, height - ypos, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, data);
-      vec4 color = vec4(data[0] / 255.0, data[1] / 255.0, data[2] / 255.0, 1.0);
-      int index = UNIQUE_COLOR_TO_INT(color);
+    // draw with unique colors
+    display(true);
 
-      if (index < MODEL_NUM_VERTICES) {
-        selected[index*3] = selected[index*3] == 0.0 ? 1.0 : 0.0;
-        selected[(index*3)+1] = selected[(index*3)+1] == 0.0 ? 1.0 : 0.0;
-        selected[(index*3)+2] = selected[(index*3)+2] == 0.0 ? 1.0 : 0.0;
-      }
+    unsigned char data[4];
+    glReadPixels(xpos, height - ypos, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    vec4 color = vec4(data[0] / 255.0, data[1] / 255.0, data[2] / 255.0, 1.0);
+    int index = UNIQUE_COLOR_TO_INT(color);
+
+    if (index < MODEL_NUM_VERTICES) {
+      selected[index * 3] = selected[index * 3] == 0.0 ? 1.0 : 0.0;
+      selected[(index * 3) + 1] = selected[(index * 3) + 1] == 0.0 ? 1.0 : 0.0;
+      selected[(index * 3) + 2] = selected[(index * 3) + 2] == 0.0 ? 1.0 : 0.0;
     }
-  
+  }
 }
 
 bool _close_enough(vec4 a, vec4 b) {
