@@ -1,0 +1,3 @@
+[submodule "extern/zax-parser"]
+	path = extern/zax-parser
+	url = https://github.com/tamask1s/zax-parser.git
