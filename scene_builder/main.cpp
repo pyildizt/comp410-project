@@ -19,9 +19,10 @@ bool right_click_released_once = false;
 
 const int num_vertices_for_cube = 36;
 
-float speed = 0.05; 
+GLfloat fovy = 60.0;
+float object_speed = 0.05; 
 float camera_speed = 0.05;
-float scale_amount = 0.00;
+// float scale_amount = 0.00;
 float radius = 0.1; // cube has side = 2*radius
 float frame_cube_half_side_length = 1.05;
 float inital_z_placement = -2.8;
@@ -48,7 +49,6 @@ double yaw   = -90.0f;	// yaw is initialized to -90.0 degrees since a yaw of 0.0
 double pitch =  0.0f;
 double lastX =  512 / 2.0;
 double lastY =  512 / 2.0;
-double fov   =  45.0f;
 
 double last_yaw = yaw;
 double last_pitch = pitch;
@@ -61,8 +61,9 @@ GLuint cube_buffer;
 
 // Array of rotation angles (in degrees) for each coordinate axis
 enum { Xaxis = 0, Yaxis = 1, Zaxis = 2, NumAxes = 3 };
-GLfloat Theta[NumAxes] = { 0.0, 0.0, 0.0 };
+GLfloat Theta[NumAxes]       = { 0.0, 0.0, 0.0 };
 GLfloat Translation[NumAxes] = { 0.0, 0.0, 0.0 };
+GLfloat Scaling[NumAxes]     = { 0.0, 0.0, 0.0 };
 
 // Vertices of a unit cube centered at origin, sides aligned with axes
 point4 cube_vertices[8] = {
@@ -139,7 +140,7 @@ void init()
     
     // Set projection matrix
     GLfloat aspect_ratio = (GLfloat) SCREEN_WIDTH / (GLfloat) SCREEN_HEIGHT;
-    projection = Perspective(60.0, aspect_ratio, 0.1, 15.5);
+    projection = Perspective(fovy, aspect_ratio, 0.1, 15.5);
     glUniformMatrix4fv(Projection, 1, GL_TRUE, projection);
 
     glEnable( GL_DEPTH_TEST );
@@ -161,28 +162,29 @@ void display(void)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     vec3 translation(Translation[Xaxis], Translation[Yaxis], Translation[Zaxis]);
-    vec3 scaling((object_scale.x + scale_amount), (object_scale.y + scale_amount), (object_scale.z + scale_amount));
+    vec3 coords = object_coordinates + translation;
 
-    mat4 rotation_matrix =  Translate(object_coordinates) * 
+    // vec3 scaling((object_scale.x + scale_amount), (object_scale.y + scale_amount), (object_scale.z + scale_amount));
+    vec3 scaling((object_scale.x + Scaling[Xaxis]), (object_scale.y + Scaling[Yaxis]), (object_scale.z + Scaling[Zaxis]));
+
+    mat4 rotation_matrix =  Translate(coords) * 
                             RotateX( Theta[Xaxis] ) * RotateY( Theta[Yaxis] ) * RotateZ( Theta[Zaxis] ) * 
-                            Translate(-object_coordinates);
+                            Translate(-coords);
 
-    mat4 scaling_matrix = Translate(object_coordinates) * Scale(scaling) * Translate(-object_coordinates);
+    mat4 scaling_matrix = Translate(coords) * Scale(scaling) * Translate(-coords);
 
     // model = model * Translate(translation) * 
     //                 rotation_matrix * 
     //                 scaling_matrix;
 
-    // TODO: EVERY TIME THE OBJECT MOVES ITS NEW POSITION OBJECT COORDINATES MUST BE GIVEN TO THE ROTATION AND SCALING MATRICES!!!!
-
-    model = Translate(translation) * 
-            rotation_matrix * 
-            scaling_matrix * 
-            model;
+    // model = Translate(translation) * 
+    //         rotation_matrix * 
+    //         scaling_matrix * 
+    //         model;
     
-    // model =   Translate(translation + object_coordinates) * 
-    //             rotation_matrix * 
-    //             scaling_matrix;
+    model = rotation_matrix * 
+            scaling_matrix *
+            Translate(coords);
 
     view = LookAt(camera_coordinates, camera_coordinates + camera_front, camera_up);
 
@@ -234,19 +236,19 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 
         // Move camera:
         case GLFW_KEY_W:
-            if (action == GLFW_PRESS || action == GLFW_REPEAT) 
+            if ((action == GLFW_PRESS || action == GLFW_REPEAT) && right_click_holding) 
                 camera_coordinates += camera_speed * camera_front;   
             break;
         case GLFW_KEY_S:
-            if (action == GLFW_PRESS || action == GLFW_REPEAT) 
+            if ((action == GLFW_PRESS || action == GLFW_REPEAT) && right_click_holding) 
                 camera_coordinates -= camera_speed * camera_front;  
             break;
         case GLFW_KEY_A:
-            if (action == GLFW_PRESS || action == GLFW_REPEAT) 
+            if ((action == GLFW_PRESS || action == GLFW_REPEAT) && right_click_holding) 
                 camera_coordinates -= normalize(cross(camera_front, camera_up)) * camera_speed;  
             break;
         case GLFW_KEY_D:
-            if (action == GLFW_PRESS || action == GLFW_REPEAT) 
+            if ((action == GLFW_PRESS || action == GLFW_REPEAT) && right_click_holding) 
                 camera_coordinates += normalize(cross(camera_front, camera_up)) * camera_speed;
             break;
         case GLFW_KEY_Q:
@@ -261,66 +263,66 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
         // Translate object:
         case GLFW_KEY_LEFT:
             if (action == GLFW_PRESS || action == GLFW_REPEAT) 
-                Translation[Xaxis] = -speed;   
-            if (action == GLFW_RELEASE)
-                Translation[0] = Translation[1] = Translation[2] = 0.0;
+                Translation[Xaxis] += -object_speed;    // was = -object_speed changed to += -object_speed
+            // if (action == GLFW_RELEASE)
+            //     Translation[0] = Translation[1] = Translation[2] = 0.0;
             break;
         case GLFW_KEY_RIGHT:
             if (action == GLFW_PRESS || action == GLFW_REPEAT) 
-                Translation[Xaxis] = speed;   
-            if (action == GLFW_RELEASE)
-                Translation[0] = Translation[1] = Translation[2] = 0.0;
+                Translation[Xaxis] += object_speed;   
+            // if (action == GLFW_RELEASE)
+            //     Translation[0] = Translation[1] = Translation[2] = 0.0;
             break;
         case GLFW_KEY_UP:
             if (action == GLFW_PRESS || action == GLFW_REPEAT)
             {
                 if (mods & GLFW_MOD_SHIFT)
-                    Translation[Zaxis] = -speed;
+                    Translation[Zaxis] += -object_speed;
                 else
-                    Translation[Yaxis] = speed;
+                    Translation[Yaxis] += object_speed;
             }
-            if (action == GLFW_RELEASE)
-                Translation[0] = Translation[1] = Translation[2] = 0.0;
+            // if (action == GLFW_RELEASE)
+            //     Translation[0] = Translation[1] = Translation[2] = 0.0;
             break;
         case GLFW_KEY_DOWN:
             if (action == GLFW_PRESS || action == GLFW_REPEAT)
             {
                 if (mods & GLFW_MOD_SHIFT)
-                    Translation[Zaxis] = speed;
+                    Translation[Zaxis] += object_speed;
                 else
-                    Translation[Yaxis] = -speed;
+                    Translation[Yaxis] += -object_speed;
             }
-            if (action == GLFW_RELEASE)
-                Translation[0] = Translation[1] = Translation[2] = 0.0;
+            // if (action == GLFW_RELEASE)
+            //     Translation[0] = Translation[1] = Translation[2] = 0.0;
             break;
 
         // Rotate object around its origin:
         case GLFW_KEY_1:
             if (action == GLFW_PRESS || action == GLFW_REPEAT) 
                 if (mods & GLFW_MOD_SHIFT)
-                    Theta[Xaxis] = -1.0;
+                    Theta[Xaxis] += -1.0;
                 else
-                    Theta[Xaxis] = 1.0;   
-            if (action == GLFW_RELEASE)
-                Theta[0] = Theta[1] = Theta[2] = 0.0;
+                    Theta[Xaxis] += 1.0;   
+            // if (action == GLFW_RELEASE)
+            //     Theta[0] = Theta[1] = Theta[2] = 0.0;
             break;
         case GLFW_KEY_2:  
             if (action == GLFW_PRESS || action == GLFW_REPEAT) 
                 if (mods & GLFW_MOD_SHIFT)
-                    Theta[Yaxis] = -1.0;   
+                    Theta[Yaxis] += -1.0;   
                 else
-                    Theta[Yaxis] = 1.0;   
-            if (action == GLFW_RELEASE)
-                Theta[0] = Theta[1] = Theta[2] = 0.0;
+                    Theta[Yaxis] += 1.0;   
+            // if (action == GLFW_RELEASE)
+            //     Theta[0] = Theta[1] = Theta[2] = 0.0;
             break;
         case GLFW_KEY_3:    
             if (action == GLFW_PRESS || action == GLFW_REPEAT) 
                 if (mods & GLFW_MOD_SHIFT)
-                    Theta[Zaxis] = -1.0;   
+                    Theta[Zaxis] += -1.0;   
                 else
-                    Theta[Zaxis] = 1.0;   
-            if (action == GLFW_RELEASE)
-                Theta[0] = Theta[1] = Theta[2] = 0.0;
+                    Theta[Zaxis] += 1.0;   
+            // if (action == GLFW_RELEASE)
+            //     Theta[0] = Theta[1] = Theta[2] = 0.0;
             break;
 
         // Scale object:
@@ -328,12 +330,41 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
             if (action == GLFW_PRESS || action == GLFW_REPEAT) 
             {
                 if (mods & GLFW_MOD_SHIFT)
-                    scale_amount = -0.01;
+                    Scaling[Xaxis] += -0.01;
                 else
-                    scale_amount = 0.01;
+                    Scaling[Xaxis] += 0.01;
             }  
-            if (action == GLFW_RELEASE)
-                scale_amount = 0.00;
+            // if (action == GLFW_PRESS || action == GLFW_REPEAT) 
+            // {
+            //     if (mods & GLFW_MOD_SHIFT)
+            //         scale_amount += -0.01;
+            //     else
+            //         scale_amount += 0.01;
+            // }  
+            // if (action == GLFW_RELEASE)
+            //     scale_amount = 0.00;
+            break;
+        case GLFW_KEY_5:
+            if (action == GLFW_PRESS || action == GLFW_REPEAT) 
+            {
+                if (mods & GLFW_MOD_SHIFT)
+                    Scaling[Yaxis] += -0.01;
+                else
+                    Scaling[Yaxis] += 0.01;
+            }  
+            // if (action == GLFW_RELEASE)
+            //     scale_amount = 0.00;
+            break;
+        case GLFW_KEY_6:
+            if (action == GLFW_PRESS || action == GLFW_REPEAT) 
+            {
+                if (mods & GLFW_MOD_SHIFT)
+                    Scaling[Zaxis] += -0.01;
+                else
+                    Scaling[Zaxis] += 0.01;
+            }  
+            // if (action == GLFW_RELEASE)
+            //     scale_amount = 0.00;
             break;
     }
     
@@ -367,6 +398,10 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
     x_pos_diff = xposIn - last_mouse_pos_x;
     y_pos_diff = yposIn - last_mouse_pos_y;
 
+    double mouse_sensitivity = 0.5;
+    x_pos_diff *= mouse_sensitivity;
+    y_pos_diff *= mouse_sensitivity;
+
     // We store these to calculate the difference for the next time
     last_mouse_pos_x = xposIn;
     last_mouse_pos_y = yposIn;
@@ -382,11 +417,10 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
         pitch -= y_pos_diff;
     }
 
-    // make sure that when pitch is out of bounds, screen doesn't get flipped
-    if (pitch > 89.0f)
-        pitch = 89.0f;
-    if (pitch < -89.0f)
-        pitch = -89.0f;
+    if (pitch > 89.9)
+        pitch = 89.9;
+    if (pitch < -89.9)
+        pitch = -89.9;
   
     if (right_click_holding)
     {
@@ -403,19 +437,21 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
     glViewport(0, 0, width, height);
     GLfloat aspect_ratio = (GLfloat) width / (GLfloat) height;
+    GLfloat fovy_changed;
 
     if (width < height)
-        projection = Perspective(atan(tan(60.0 * (M_PI/180)/2) * (1/aspect_ratio)) * (180/M_PI) * 2, aspect_ratio, 1.8, 5.5);
+        fovy_changed = atan(tan(fovy * (M_PI/180)/2) * (1/aspect_ratio)) * (180/M_PI) * 2;
     else
-        projection = Perspective(60.0, aspect_ratio, 1.8, 5.5);
+        fovy_changed = fovy;
 
+    projection = Perspective(fovy_changed, aspect_ratio, 1.8, 5.5);
     glUniformMatrix4fv(Projection, 1, GL_TRUE, projection);
 }
 
 int main(int argc, char *argv[])
 {
     if (argc == 2) 
-        speed = abs(std::stof(argv[1]));
+        object_speed = abs(std::stof(argv[1]));
 
     if (!glfwInit())
         exit(EXIT_FAILURE);
