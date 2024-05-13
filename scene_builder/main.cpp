@@ -39,14 +39,8 @@ float camera_speed = 0.05;
 GLfloat fovy = 60.0;
 
 /* OBJECT */
-const int num_vertices_for_cube = 36;
 float object_speed = 0.05;
-float cube_half_side = 0.1;
 float inital_z_placement = -2.8;
-
-point4 points_cube[num_vertices_for_cube];
-color4 colors_cube[num_vertices_for_cube];
-
 int selected_model_index = 0; // first object model is empty and selected
 int num_of_objects = 0;       // first object model is empty and selected
 
@@ -55,8 +49,8 @@ GLuint Model, View, Projection;
 GLuint vao[2]; // TODO: make these dynamically allocated with every new object added to scene
 GLuint buffers[2];
 
-enum { Xaxis = 0, Yaxis = 1, Zaxis = 2, NumAxes = 3 };
-enum ObjectType { Cube = 0, Sphere = 1, Imported = 2, Empty = 3};
+enum {Xaxis = 0, Yaxis = 1, Zaxis = 2, NumAxes = 3};
+enum ObjectType {Cube = 0, Sphere = 1, Imported = 2, PointLight = 3, Empty = 4};
 
 struct object_model
 {
@@ -87,6 +81,34 @@ struct object_model
 struct object_model **object_models;
 int object_models_size = 10;
 
+/* CUBE, SPHERE */
+const int num_vertices_for_cube = 36;
+const int num_vertices_for_sphere = 3*(4*((4*4*4*4))); // corresponds to create_sphere(4)
+
+float cube_half_side = 0.1;
+float radius = 0.1;
+static int k = 0;
+
+point4 points_sphere[num_vertices_for_sphere];
+color4 colors_sphere[num_vertices_for_sphere];
+
+point4 points_cube[num_vertices_for_cube];
+color4 colors_cube[num_vertices_for_cube];
+
+// Function declarations
+void create_sphere(int n);
+float give_length(point4 a);
+
+point4 four_d_normalizer(const point4& p);
+point4 point_scaler(const point4& p, float scaler);
+
+// following 5 lines are excerpted from the textbook
+point4 v[4]= {
+    vec4(0.0, 0.0, 1.0, 1.0),
+    vec4(0.0, 0.942809, -0.333333, 1.0),
+    vec4(-0.816497, -0.471405, -0.333333, 1.0),
+    vec4(0.816497, -0.471405, -0.333333, 1.0)
+};
 
 // Vertices of a unit cube centered at origin, sides aligned with axes
 point4 cube_vertices[8] = {
@@ -168,11 +190,29 @@ void add_object(ObjectType object_type)
         break;
     
     case Sphere:
-        //TODO: do this for sphere
+        obj->vao = &(vao[1]);
+        obj->buffer = &(buffers[1]);
+        obj->vertices_num = num_vertices_for_sphere;
+
+        obj->points_array = points_sphere;
+        obj->colors_array = colors_sphere;
         break;
 
     case Imported:
         //TODO: GET THESE VALUES FROM JSON FILE!!!
+        break;
+    
+    case PointLight:
+        // TODO: SPHERE BUT POINTLIGHT INSTEAD SO LIKE DIFFERENT COLOR ETC
+        //          SHOULD NOT BE ABLE TO BE MODIFIED USING SHADER EDITOR FOR EXAMPLE
+        obj->vao = &(vao[1]);
+        obj->buffer = &(buffers[1]);
+        obj->vertices_num = num_vertices_for_sphere;
+
+        obj->points_array = points_sphere;
+        obj->colors_array = colors_sphere;
+
+        std::fill_n(obj->Scaling, 3, -0.8f);
         break;
 
     case Empty:
@@ -201,11 +241,9 @@ void add_object(ObjectType object_type)
         std::fill_n(obj->picking_colors_array, obj->vertices_num, color4(1.0, 0.0, 0.0, 1.0)); 
     }
 
-    std::cout << "Object obj: " << *obj << std::endl;
-
     object_models[num_of_objects-1] = obj;
 
-    std::cout << "Object oms: " << *(object_models[num_of_objects-1]) << std::endl;
+    std::cout << "Object " << (num_of_objects-1) << ": " << *(object_models[num_of_objects-1]) << std::endl;
 }
 
 void delete_all_objects() // FIXME: fix this
@@ -259,6 +297,29 @@ void init()
     glEnableVertexAttribArray(vColor_cube);
     glVertexAttribPointer(vColor_cube, 4, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(sizeof(points_cube)));
         
+    /* Sphere */
+    create_sphere(4);
+
+    for(int t=0; t<num_vertices_for_sphere; t++)
+    {
+        points_sphere[t]=point_scaler(points_sphere[t],0.1);
+    }
+
+    glBindVertexArray(vao[1]);
+    glBindBuffer(GL_ARRAY_BUFFER, buffers[1]);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(points_sphere) + sizeof(colors_sphere),NULL, GL_STATIC_DRAW);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(points_sphere), points_sphere);
+    glBufferSubData(GL_ARRAY_BUFFER, sizeof(points_sphere), sizeof(colors_sphere), colors_sphere);
+    
+    // sphere attribute object
+    GLuint vPosition_sphere = glGetAttribLocation(program, "vPosition");
+    glEnableVertexAttribArray(vPosition_sphere);
+    glVertexAttribPointer(vPosition_sphere, 4, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+
+    GLuint vColor_sphere = glGetAttribLocation(program, "vColor");
+    glEnableVertexAttribArray(vColor_sphere);
+    glVertexAttribPointer(vColor_sphere, 4, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(sizeof(points_sphere)));
+    
     // Retrieve transformation uniform variable locations
     Model = glGetUniformLocation( program, "Model" );
     View = glGetUniformLocation( program, "View" );
@@ -399,11 +460,17 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 
     case GLFW_KEY_C: // add new cube to screen
         if (action == GLFW_PRESS)
-        {
             add_object(Cube);
-        }
         break;
-    case GLFW_KEY_V: // increase selected_model_index
+    case GLFW_KEY_V: // add new sphere to screen
+        if (action == GLFW_PRESS)
+            add_object(Sphere);
+        break;
+    case GLFW_KEY_B: // add new sphere to screen
+        if (action == GLFW_PRESS)
+            add_object(PointLight);
+        break;
+    case GLFW_KEY_SPACE: // increase selected_model_index
         if (action == GLFW_PRESS)
         {
             object_models[selected_model_index]->is_selected = false;
@@ -703,3 +770,55 @@ int main(int argc, char *argv[])
     exit(EXIT_SUCCESS);
 }
 
+// following 3 functions are excerpted from the textbook
+void triangle(point4 a, point4 b, point4 c)
+{
+    points_sphere[k++] = a;
+    points_sphere[k++] = b;
+    points_sphere[k++] = c;
+}
+
+void divide_triangle(point4 a, point4 b, point4 c, int n)
+{
+    if (n == 0) 
+    {
+        triangle(a, b, c);
+        return;
+    }
+    // Compute midpoints of edges
+    point4 v1 = four_d_normalizer(a + b);
+    point4 v2 = four_d_normalizer(a + c);
+    point4 v3 = four_d_normalizer(b + c);
+
+    // Recursively subdivide new triangles
+    divide_triangle(a, v1, v2, n - 1);
+    divide_triangle(c, v2, v3, n - 1);
+    divide_triangle(b, v3, v1, n - 1);
+    divide_triangle(v1, v3, v2, n - 1);
+}
+
+void create_sphere(int n)
+{
+    divide_triangle(v[0], v[1], v[2], n);
+    divide_triangle(v[3], v[2], v[1], n);
+    divide_triangle(v[0], v[3], v[1], n);
+    divide_triangle(v[0], v[2], v[3], n);
+
+    std::fill_n(colors_sphere, num_vertices_for_sphere, color4(0.8, 0.8, 0.8, 1.0));
+}
+
+// we normalize a 4-d vector so that its eucledian-metric length will be 1 and thus touch the surface of the unit-sphere
+point4 four_d_normalizer(const point4& p)
+{
+    float len = (p.x * p.x + p.y * p.y + p.z * p.z);
+    point4 point;
+    point = p / sqrt(len);
+    point.w = 1.0;
+    return point;
+}
+
+// the following function scales first 3 coordinates of a 4-D homogenous point by the given constant
+point4 point_scaler(const point4& p, float scaler)
+{
+    return point4(p.x * scaler, p.y * scaler, + p.z * scaler, 1.0);
+}
