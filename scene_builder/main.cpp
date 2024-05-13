@@ -5,6 +5,9 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#ifndef __APPLE__
+#include <GL/gl.h>
+#endif
 
 // ui library: dearimgui
 
