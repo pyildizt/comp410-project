@@ -20,9 +20,9 @@ bool point_close_enough(float p1, float p2) {
  *
  */
 void test1() {
-  auto model = load_model_with_default_material("./arrow.off");
+  auto model = load_model_with_default_material("./cube.off");
   auto json = model_to_json(model);
-  std::ofstream file("arrow.json");
+  std::ofstream file("cube.json");
   file << json;
   file.close();
 }
@@ -33,13 +33,13 @@ void test1() {
  */
 void test2() {
 
-  auto model = load_model_with_default_material("./bunny.off");
+  auto model = load_model_with_default_material("./mushroom.off");
   auto json = model_to_json(model);
-  std::ofstream file("test2.json");
+  std::ofstream file("mushroom.json");
   file << json;
   file.close();
 
-  std::ifstream file2("test2.json");
+  std::ifstream file2("mushroom.json");
   std::stringstream buffer;
   buffer << file2.rdbuf();
   std::string json2 = buffer.str();

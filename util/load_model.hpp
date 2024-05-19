@@ -13,4 +13,7 @@ std::vector<triangle> load_triangles(std::string path);
 model load_model_with_default_material(std::string path);
 model load_model_with_default_material(std::vector<triangle> triangles);
 
+
+void renormalizeUVs(model* _model);
+
 #endif

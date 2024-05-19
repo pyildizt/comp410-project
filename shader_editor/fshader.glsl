@@ -14,6 +14,12 @@ uniform vec4 ambientProperty;
 uniform vec4 specularProperty;
 uniform float shininess;
 uniform float isFakeDisplay;
+
+
+uniform sampler2D texture1;
+uniform int hasTexture;
+in vec4 UV;
+
 out vec4 fcolor;
 
 const vec4 edgeColor = vec4(1.0, 0.5, 0.0, 1.0);
@@ -31,14 +37,24 @@ void main()
         vec3 L = normalize(fL);
 
         vec3 H = normalize( L + V );
+        vec2 ux = UV.xy;
+        ux.y *= -1;
+        vec4 textureColor = texture( texture1, ux ); 
+        float textureProportion = hasTexture * .8;
         
-        vec4 ambient = ambientProperty;
+        // remap properties with texture
+
+        vec4 ambientProperty1 = ambientProperty * ((1.0 - textureProportion) + textureColor * textureProportion);
+        vec4 diffuseProperty1 = diffuseProperty * ((1.0 - textureProportion) + textureColor * textureProportion);
+        vec4 specularProperty1 = specularProperty * ((1.0 - textureProportion) + textureColor * textureProportion);
+
+        vec4 ambient = ambientProperty1;
 
         float Kd = max(dot(L, N), 0.0);
-        vec4 diffuse = Kd*diffuseProperty;
+        vec4 diffuse = Kd*diffuseProperty1;
         
         float Ks = pow(max(dot(N, H), 0.0), shininess);
-        vec4 specular = Ks*specularProperty;
+        vec4 specular = Ks*specularProperty1;
 
         // discard the specular highlight if the light's behind the vertex
         if( dot(L, N) < 0.0 ) {
@@ -61,8 +77,9 @@ void main()
             return;
         }
 
-
-        fcolor = ((1.0 - fSelected) * (ambient + diffuse + specular)) + (fSelected * selectedColor);
+        float fs = fSelected * .8;
+        fcolor = ((1.0 - fs) * (ambient + diffuse + specular)) + (fs * selectedColor);
         fcolor.a = 1.0;
+        // fcolor = texture( texture1, UV.xy );
 
 } 
