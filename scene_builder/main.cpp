@@ -14,7 +14,10 @@
 
 #define SCREEN_WIDTH 1200
 #define SCREEN_HEIGHT 600
-#define VAO_NUM 5 //TODO: change as necessary
+#define VAO_NUM 4 //TODO: change as necessary
+#define ARROW_PATH "arrow.json"
+#define ARROW_VERTICES_NUM 270
+#define ARROW_INDEX 3
 
 #define INT_TO_UNIQUE_COLOR(x)                                                 \
   vec4(((GLfloat)(x & 0xFF)) / 255.0, ((GLfloat)((x >> 8) & 0xFF)) / 255.0,    \
@@ -53,6 +56,9 @@ float camera_speed = 0.05;
 GLfloat fovy = 60.0;
 
 /* OBJECT */
+bool object_arrow_selected = false;
+int object_arrow_selected_axis;
+
 float object_speed = 0.01;
 float inital_z_placement = -2.8;
 int selected_model_index = 0; // first object model is empty and selected
@@ -60,10 +66,12 @@ int num_of_objects = 0;       // first object model is empty and selected
 
 mat4 view_matrix, projection_matrix;
 GLuint Model, View, Projection;
-GLuint vao[VAO_NUM]; // TODO: make these dynamically allocated with every new object added to scene
+GLuint vao[VAO_NUM];
 GLuint buffers[VAO_NUM];
 GLuint vPosition;
 GLuint vColor;
+
+mat4 arrow_model_matrices[3];
 
 enum {Xaxis = 0, Yaxis = 1, Zaxis = 2, NumAxes = 3};
 enum ObjectType {Cube, Sphere, Imported, PointLight, Empty};
@@ -79,8 +87,8 @@ struct object_model
     GLfloat Scaling[NumAxes];
     GLfloat Translation[NumAxes];
 
-    GLuint *vao;
-    GLuint *buffer;
+    GLuint vao;
+    GLuint buffer;
     int vertices_num;
 
     point4 *points_array;
@@ -101,9 +109,6 @@ struct object_model
 struct object_model *empty_object;
 struct object_model **object_models;
 int object_models_size = 10;
-struct model **models;
-int models_size = 10;
-int num_of_models = 0;
 
 /* CUBE, SPHERE */
 const int num_vertices_for_cube = 36;
@@ -122,6 +127,11 @@ color4 colors_point_light[num_vertices_for_point_light];
 
 point4 points_cube[num_vertices_for_cube];
 color4 colors_cube[num_vertices_for_cube];
+
+vec4 points_arrow[ARROW_VERTICES_NUM];
+color4 colors_arrow[3][ARROW_VERTICES_NUM];
+color4 picking_colors_arrow[3][ARROW_VERTICES_NUM];
+
 
 // Vertices of a unit cube centered at origin, sides aligned with axes
 point4 cube_vertices[8] = {
@@ -261,6 +271,40 @@ void create_object_matrices(struct object_model *obj)
     }   
 }
 
+void draw_object_arrows(struct object_model *obj, bool with_picking)
+{
+    // x, y, z arrows respectively
+    float distance_from_object = 0.15f;
+    arrow_model_matrices[0] = obj->model_matrix * Translate(distance_from_object, 0, 0) * RotateZ(-90.0f);
+    arrow_model_matrices[1] = obj->model_matrix * Translate(0, distance_from_object, 0);
+    arrow_model_matrices[2] = obj->model_matrix * Translate(0, 0, distance_from_object) * RotateX(90.0f);
+
+    glBindVertexArray(vao[ARROW_INDEX]);
+    glBindBuffer(GL_ARRAY_BUFFER, buffers[ARROW_INDEX]);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+    if (with_picking)
+        glBufferSubData(GL_ARRAY_BUFFER, sizeof(points_arrow), sizeof(picking_colors_arrow[0]), picking_colors_arrow[0]);
+    else
+        glBufferSubData(GL_ARRAY_BUFFER, sizeof(points_arrow), sizeof(colors_arrow[0]), colors_arrow[0]);
+    glUniformMatrix4fv(Model, 1, GL_TRUE, arrow_model_matrices[0]);
+    glDrawArrays(GL_TRIANGLES, 0, ARROW_VERTICES_NUM);
+
+    if (with_picking)
+        glBufferSubData(GL_ARRAY_BUFFER, sizeof(points_arrow), sizeof(picking_colors_arrow[0]), picking_colors_arrow[1]);
+    else
+        glBufferSubData(GL_ARRAY_BUFFER, sizeof(points_arrow), sizeof(colors_arrow[0]), colors_arrow[1]);
+    glUniformMatrix4fv(Model, 1, GL_TRUE, arrow_model_matrices[1]);
+    glDrawArrays(GL_TRIANGLES, 0, ARROW_VERTICES_NUM);
+
+    if (with_picking)
+        glBufferSubData(GL_ARRAY_BUFFER, sizeof(points_arrow), sizeof(picking_colors_arrow[0]), picking_colors_arrow[2]);
+    else
+        glBufferSubData(GL_ARRAY_BUFFER, sizeof(points_arrow), sizeof(colors_arrow[0]), colors_arrow[2]);
+    glUniformMatrix4fv(Model, 1, GL_TRUE, arrow_model_matrices[2]);
+    glDrawArrays(GL_TRIANGLES, 0, ARROW_VERTICES_NUM);
+}
+
 struct model load_model(std::string filename) 
 {
     std::ifstream file(filename);
@@ -279,7 +323,7 @@ struct model load_model(std::string filename)
     return to_model(smodel);
 }
 
-struct object_model *add_object(ObjectType obj_type)
+struct object_model *add_object(ObjectType obj_type, std::string filename)
 {
     num_of_objects++;
 
@@ -315,13 +359,14 @@ struct object_model *add_object(ObjectType obj_type)
 
     struct model imported_model;
     float point_scaler;
+    GLuint new_vao, new_buffer;
 
     // initialize other varibles depending on object type
     switch (obj_type)
     {
     case Cube:
-        obj->vao = &(vao[0]);
-        obj->buffer = &(buffers[0]);
+        obj->vao = vao[0];
+        obj->buffer = buffers[0];
         obj->vertices_num = num_vertices_for_cube;
 
         obj->points_array = points_cube;
@@ -329,8 +374,8 @@ struct object_model *add_object(ObjectType obj_type)
         break;
     
     case Sphere:
-        obj->vao = &(vao[1]);
-        obj->buffer = &(buffers[1]);
+        obj->vao = vao[1];
+        obj->buffer = buffers[1];
         obj->vertices_num = num_vertices_for_sphere;
 
         obj->points_array = points_sphere;
@@ -338,8 +383,8 @@ struct object_model *add_object(ObjectType obj_type)
         break;
 
     case PointLight:
-        obj->vao = &(vao[2]);
-        obj->buffer = &(buffers[2]);
+        obj->vao = vao[2];
+        obj->buffer = buffers[2];
         obj->vertices_num = num_vertices_for_point_light;
 
         obj->points_array = points_point_light;
@@ -347,20 +392,8 @@ struct object_model *add_object(ObjectType obj_type)
         break;
 
     case Imported:
-        num_of_models++;
-        if (num_of_models > models_size-3)
-        {
-            models_size *= 2;
-            models = (struct model **) realloc(models, models_size * sizeof(struct model *));
-            if (models == nullptr) 
-            {
-                perror("Error allocating memory to models in add_object\n");
-                return nullptr;
-            }
-        }
 
-        imported_model = load_model("arrow.json"); //FIXME:
-        models[num_of_models-1] = &imported_model;
+        imported_model = load_model(filename); 
         obj->model = &imported_model;
 
         //////////////////////////////////////
@@ -374,8 +407,11 @@ struct object_model *add_object(ObjectType obj_type)
 
         //////////////////////////////////////
 
-        obj->vao = &(vao[4]); //FIXME: vao must dynamically allocated array
-        obj->buffer = &(buffers[4]);
+        glGenVertexArrays(1, &new_vao);
+        glGenBuffers(1, &new_buffer);
+
+        obj->vao = new_vao; //FIXME: vao must dynamically allocated array
+        obj->buffer = new_buffer;
         obj->vertices_num = len;
 
         obj->points_array = vertices;
@@ -383,15 +419,15 @@ struct object_model *add_object(ObjectType obj_type)
         //TODO: GET THESE VALUES FROM JSON FILE!!!
         obj->colors_array = (color4 *) malloc(obj->vertices_num * sizeof(color4)); 
         if (obj->colors_array == nullptr) 
-            perror("Error allocating memory to curr_object_model->colors_array in draw_objects\n");
+            perror("Error allocating memory to curr_object_model->colors_array in add_object\n");
         else
             std::fill_n(obj->colors_array, obj->vertices_num, color4(0.8, 0.8, 0.8, 1.0)); // FIXME: THIS NEEDS TO CHANGE FOR SHADER_EDITOR
 
 
         /////////////
 
-        glBindVertexArray(vao[4]);
-        glBindBuffer(GL_ARRAY_BUFFER, buffers[4]);
+        glBindVertexArray(new_vao);
+        glBindBuffer(GL_ARRAY_BUFFER, new_buffer);
         glBufferData(GL_ARRAY_BUFFER, sizeof(point4) * obj->vertices_num + sizeof(color4) * obj->vertices_num, NULL, GL_STATIC_DRAW);
         glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(point4) * obj->vertices_num, obj->points_array);
         glBufferSubData(GL_ARRAY_BUFFER, sizeof(point4) * obj->vertices_num, sizeof(color4) * obj->vertices_num, obj->colors_array);
@@ -426,7 +462,7 @@ struct object_model *add_object(ObjectType obj_type)
             perror("Error allocating memory to obj->picking_colors_array in add_object\n");
         else
         {
-            obj->unique_id_color = INT_TO_UNIQUE_COLOR(num_of_objects);
+            obj->unique_id_color = INT_TO_UNIQUE_COLOR(num_of_objects + 4);
             std::fill_n(obj->picking_colors_array, obj->vertices_num, obj->unique_id_color); 
         }   
     }
@@ -439,6 +475,13 @@ struct object_model *add_object(ObjectType obj_type)
     return obj;
 }
 
+void transform_object_with_arrows(int x_diff, int y_diff)
+{
+    // 0 = x-axis, 1 = y-axis, 2 = z-axis
+    TODO:
+    printf("axis selected: %d\n", object_arrow_selected_axis);
+}
+
 void delete_all_objects()
 {
     struct object_model *obj;
@@ -449,7 +492,7 @@ void delete_all_objects()
         {
             if (obj->picking_colors_array != nullptr)
                 free(obj->picking_colors_array);
-            if (obj->colors_array != nullptr && obj->object_type == Imported)
+            if (obj->colors_array != nullptr)
                 free(obj->colors_array);
             free(obj);
         }   
@@ -487,9 +530,17 @@ void print_all_objects()
     printf("==============================\n");
 }
 
-void create_object_arrows()
+void create_arrow()
 {
+    model arrow_model = load_model(ARROW_PATH);
+    vec4* vertices;
+    int vertices_num;
 
+    to_point_array(&vertices, &vertices_num, &arrow_model.triangles);
+
+    float point_scaler = 0.05;
+    for(int i=0; i<ARROW_VERTICES_NUM; i++)
+        points_arrow[i] = vec4(vertices[i].x * point_scaler, vertices[i].y * point_scaler, vertices[i].z * point_scaler, 1.0);
 }
 
 // create objects, vertex arrays and buffers
@@ -508,7 +559,7 @@ void init()
 
     int index = 0;
 
-    /* Cube */
+    /* Cube index = 0 */
     create_cube();
     std::fill_n(colors_cube, num_vertices_for_cube, color4(0.8, 0.8, 0.8, 1.0));
 
@@ -525,7 +576,7 @@ void init()
     glEnableVertexAttribArray(vColor);
     glVertexAttribPointer(vColor, 4, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(sizeof(points_cube)));
         
-    /* Sphere */
+    /* Sphere index = 1 */
     index++;
     float sphere_scaler = 0.1;
     create_sphere(4, Sphere);
@@ -547,7 +598,7 @@ void init()
     glEnableVertexAttribArray(vColor);
     glVertexAttribPointer(vColor, 4, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(sizeof(points_sphere)));
            
-    /* PointLight */
+    /* PointLight index = 2 */
     index++;
     float point_light_scaler = 0.02;
     create_sphere(3, PointLight);
@@ -556,7 +607,6 @@ void init()
     for(int i=0; i<num_vertices_for_point_light; i++)
         points_point_light[i] = point4(points_point_light[i].x * point_light_scaler, 
             points_point_light[i].y * point_light_scaler, points_point_light[i].z * point_light_scaler, 1.0);
-
 
     glBindVertexArray(vao[index]);
     glBindBuffer(GL_ARRAY_BUFFER, buffers[index]);
@@ -570,7 +620,31 @@ void init()
     
     glEnableVertexAttribArray(vColor);
     glVertexAttribPointer(vColor, 4, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(sizeof(points_point_light)));
-        
+
+    /* Arrow index = 3 */
+    index++;
+    create_arrow();
+    std::fill_n(colors_arrow[0], ARROW_VERTICES_NUM, color4(1.0, 0.0, 0.0, 1.0));
+    std::fill_n(colors_arrow[1], ARROW_VERTICES_NUM, color4(0.0, 1.0, 0.0, 1.0));
+    std::fill_n(colors_arrow[2], ARROW_VERTICES_NUM, color4(0.0, 0.0, 1.0, 1.0));
+
+    std::fill_n(picking_colors_arrow[0], ARROW_VERTICES_NUM, INT_TO_UNIQUE_COLOR(1));
+    std::fill_n(picking_colors_arrow[1], ARROW_VERTICES_NUM, INT_TO_UNIQUE_COLOR(2));
+    std::fill_n(picking_colors_arrow[2], ARROW_VERTICES_NUM, INT_TO_UNIQUE_COLOR(3));
+
+    glBindVertexArray(vao[index]);
+    glBindBuffer(GL_ARRAY_BUFFER, buffers[index]);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(points_arrow) + sizeof(colors_arrow[0]), NULL, GL_STATIC_DRAW);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(points_arrow), points_arrow);
+    glBufferSubData(GL_ARRAY_BUFFER, sizeof(points_arrow), sizeof(colors_arrow[0]), colors_arrow[0]);
+    
+    // arrow attribute object    
+    glEnableVertexAttribArray(vPosition);
+    glVertexAttribPointer(vPosition, 4, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+    
+    glEnableVertexAttribArray(vColor);
+    glVertexAttribPointer(vColor, 4, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(sizeof(points_arrow)));
+      
     // Retrieve transformation uniform variable locations
     Model = glGetUniformLocation( program, "Model" );
     View = glGetUniformLocation( program, "View" );
@@ -594,17 +668,8 @@ void init()
             object_models[i] = nullptr;
     }
 
-    models = (struct model **) malloc(object_models_size * sizeof(struct model *));
-    if (models == nullptr) 
-        perror("Error allocating memory to models in init\n");
-    else 
-    {
-        for (int i = 0; i < object_models_size; i++)
-            models[i] = nullptr;
-    }
-
     // create first empty object, this will be selected when background is clicked 
-    empty_object = add_object(Empty);
+    empty_object = add_object(Empty, "");
 }
 
 void draw_objects(bool with_picking)
@@ -623,8 +688,8 @@ void draw_objects(bool with_picking)
         if (curr_object_model != nullptr)
         {
             // color arrays and drawing according to selected, picking etc.
-            glBindVertexArray(*(curr_object_model->vao));
-            glBindBuffer(GL_ARRAY_BUFFER, *(curr_object_model->buffer));
+            glBindVertexArray(curr_object_model->vao);
+            glBindBuffer(GL_ARRAY_BUFFER, curr_object_model->buffer);
             
             buf_offset = curr_object_model->vertices_num * sizeof(point4);
             buf_size = curr_object_model->vertices_num * sizeof(color4);
@@ -646,7 +711,7 @@ void draw_objects(bool with_picking)
                     selected_color_array = (color4 *) malloc(curr_object_model->vertices_num * sizeof(color4));
                     if (selected_color_array == nullptr)
                     {
-                        perror("Error allocating memory to selected_color_array");
+                        perror("Error allocating memory to selected_color_array in draw_objects");
                         return;
                     }
                     std::fill_n(selected_color_array, curr_object_model->vertices_num, color4(0.0, 0.0, 0.0, 1.0));
@@ -656,6 +721,9 @@ void draw_objects(bool with_picking)
                     glDrawArrays(GL_TRIANGLES, 0, curr_object_model->vertices_num);
                     
                     free(selected_color_array);
+
+                    // draw 3 arrows on the object
+                    draw_object_arrows(curr_object_model, with_picking);
                 }
             }
             else // if with picking then just draw all objects with their unique picking colors
@@ -664,6 +732,10 @@ void draw_objects(bool with_picking)
                 
                 glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
                 glDrawArrays(GL_TRIANGLES, 0, curr_object_model->vertices_num);
+
+                // if object selected draw 3 arrows on the object with unique picking colors also
+                if (curr_object_model->is_selected)
+                    draw_object_arrows(curr_object_model, with_picking);
             }
         }
     }
@@ -695,19 +767,19 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 
     case GLFW_KEY_C: // add new cube to screen
         if (action == GLFW_PRESS)
-            add_object(Cube);
+            add_object(Cube, "");
         break;
     case GLFW_KEY_V: // add new sphere to screen
         if (action == GLFW_PRESS)
-            add_object(Sphere);
+            add_object(Sphere, "");
         break;
     case GLFW_KEY_B: // add new point light to screen
         if (action == GLFW_PRESS)
-            add_object(PointLight);
+            add_object(PointLight, "");
         break;
     case GLFW_KEY_N: // add new imported object to screen
         if (action == GLFW_PRESS)
-            add_object(Imported);
+            add_object(Imported, "arrow.json");
         break;
     case GLFW_KEY_SPACE: // increase selected_model_index
         if (action == GLFW_PRESS)
@@ -871,16 +943,20 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
         unsigned char pixel[4];
         glReadPixels(xpos, ypos, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel);
         vec4 color = vec4(pixel[0] / 255.0, pixel[1] / 255.0, pixel[2] / 255.0, 1.0);
-        int index = UNIQUE_COLOR_TO_INT(color);
+        int index = UNIQUE_COLOR_TO_INT(color) - 4;
 
-        // printf("index: %d, selected_model_index before: %d, color is: (%.4f, %.4f, %.4f)\n", index, selected_model_index, color.x, color.y, color.z);
         if (0 <= index-1 && index-1 < num_of_objects)
         {
             object_models[selected_model_index]->is_selected = false;
             selected_model_index = index-1;
             object_models[selected_model_index]->is_selected = true;
         }
-        // printf("index: %d, selected_model_index after:  %d, color is: (%.4f, %.4f, %.4f)\n", index, selected_model_index, color.x, color.y, color.z);
+        // if object arrows selected
+        else if (0 <= index+4 && index+4 <= 3) 
+        {
+            object_arrow_selected = true;
+            object_arrow_selected_axis = index+4;
+        }
         
         if (display_picking)
             glfwSwapBuffers(window);
@@ -893,13 +969,13 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
     else if (action == GLFW_RELEASE && button == GLFW_MOUSE_BUTTON_RIGHT)
     {
         right_click_holding = false;
+        object_arrow_selected = false;
         if (!right_click_released_once)
         {
             last_yaw = yaw;
             last_pitch = pitch;
         }
         right_click_released_once = true;
-        
     }
 }
 
@@ -942,6 +1018,11 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
         front.y = sin(pitch * (M_PI / 180.0));
         front.z = sin(yaw * (M_PI / 180.0)) * cos(pitch * (M_PI / 180.0));
         camera_front = normalize(front);       
+    }
+
+    if (object_arrow_selected)
+    {
+        transform_object_with_arrows(x_pos_diff, y_pos_diff);
     }
         
 }
