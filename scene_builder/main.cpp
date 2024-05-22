@@ -1,4 +1,6 @@
 #include "Angel.h"
+#include "data_types.hpp"
+#include "load_model.hpp"
 #include <stdlib.h>
 #include <time.h>
 #include <math.h>
@@ -12,7 +14,7 @@
 
 #define SCREEN_WIDTH 1200
 #define SCREEN_HEIGHT 600
-#define VAO_NUM 3 //TODO: change as necessary
+#define VAO_NUM 5 //TODO: change as necessary
 
 #define INT_TO_UNIQUE_COLOR(x)                                                 \
   vec4(((GLfloat)(x & 0xFF)) / 255.0, ((GLfloat)((x >> 8) & 0xFF)) / 255.0,    \
@@ -56,12 +58,12 @@ float inital_z_placement = -2.8;
 int selected_model_index = 0; // first object model is empty and selected
 int num_of_objects = 0;       // first object model is empty and selected
 
-mat4 view, projection;
+mat4 view_matrix, projection_matrix;
 GLuint Model, View, Projection;
 GLuint vao[VAO_NUM]; // TODO: make these dynamically allocated with every new object added to scene
 GLuint buffers[VAO_NUM];
-GLuint vPosition[VAO_NUM];
-GLuint vColor[VAO_NUM];
+GLuint vPosition;
+GLuint vColor;
 
 enum {Xaxis = 0, Yaxis = 1, Zaxis = 2, NumAxes = 3};
 enum ObjectType {Cube, Sphere, Imported, PointLight, Empty};
@@ -69,9 +71,10 @@ enum ObjectType {Cube, Sphere, Imported, PointLight, Empty};
 struct object_model
 {
     enum ObjectType object_type;
+    struct model *model;
 
     vec3 object_coordinates;
-    mat4 model;
+    mat4 model_matrix;
     GLfloat Theta[NumAxes];
     GLfloat Scaling[NumAxes];
     GLfloat Translation[NumAxes];
@@ -95,9 +98,12 @@ struct object_model
     }
 };
 
-struct object_model **object_models;
 struct object_model *empty_object;
+struct object_model **object_models;
 int object_models_size = 10;
+struct model **models;
+int models_size = 10;
+int num_of_models = 0;
 
 /* CUBE, SPHERE */
 const int num_vertices_for_cube = 36;
@@ -233,7 +239,7 @@ void create_object_matrices(struct object_model *obj)
             // PointLight cannot be scaled or rotated
             if (obj->object_type == PointLight)
             {
-                obj->model = Translate(translation);
+                obj->model_matrix = Translate(translation);
             }
             else
             {
@@ -249,10 +255,28 @@ void create_object_matrices(struct object_model *obj)
                                         (1.0 + obj->Scaling[Zaxis])) * 
                                     Translate(-translation);
 
-                obj->model = rotation_matrix * scaling_matrix * Translate(translation);
+                obj->model_matrix = rotation_matrix * scaling_matrix * Translate(translation);
             }
         }
     }   
+}
+
+struct model load_model(std::string filename) 
+{
+    std::ifstream file(filename);
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    std::string json = buffer.str();
+    file.close();
+
+    serializable_model smodel;
+    smodel.zax_from_json(json.c_str());
+
+    printf("model loaded\n");
+
+    // std::cout << "Loaded Model: " << smodel << std::endl;
+
+    return to_model(smodel);
 }
 
 struct object_model *add_object(ObjectType obj_type)
@@ -281,12 +305,16 @@ struct object_model *add_object(ObjectType obj_type)
 
     // initialize object_model variables
     obj->object_type = obj_type;
+    obj->model = nullptr;
     obj->object_coordinates = vec3(0.0f, 0.0f, 0.0f);
-    obj->model = Translate(0.0, 0.0, inital_z_placement);
+    obj->model_matrix = Translate(0.0, 0.0, inital_z_placement);
     std::fill_n(obj->Theta, 3, 0.0f);
     std::fill_n(obj->Scaling, 3, 0.0f);
     std::fill_n(obj->Translation, 3, 0.0f);
     obj->is_selected = false;
+
+    struct model imported_model;
+    float point_scaler;
 
     // initialize other varibles depending on object type
     switch (obj_type)
@@ -309,28 +337,74 @@ struct object_model *add_object(ObjectType obj_type)
         obj->colors_array = colors_sphere;
         break;
 
-    case Imported:
-    // TODO: use   smodel.zax_from_json(json2.c_str());
-
-        //TODO: GET THESE VALUES FROM JSON FILE!!!
-        // obj->colors_array = (color4 *) malloc(obj->vertices_num * sizeof(color4)); 
-        // if (obj->colors_array == nullptr) 
-        // {
-        //     perror("Error allocating memory to curr_object_model->colors_array in draw_objects\n");
-        //     return;
-        // }
-        // std::fill_n(obj->colors_array, curr_object_model->vertices_num, color4(0.8, 0.8, 0.8, 1.0)); // FIXME: THIS NEEDS TO CHANGE FOR SHADER_EDITOR
-        break;
-    
     case PointLight:
-        // TODO: SPHERE BUT POINTLIGHT INSTEAD SO LIKE DIFFERENT COLOR ETC
-        //          SHOULD NOT BE ABLE TO BE MODIFIED USING SHADER EDITOR FOR EXAMPLE
         obj->vao = &(vao[2]);
         obj->buffer = &(buffers[2]);
         obj->vertices_num = num_vertices_for_point_light;
 
         obj->points_array = points_point_light;
         obj->colors_array = colors_point_light;
+        break;
+
+    case Imported:
+        num_of_models++;
+        if (num_of_models > models_size-3)
+        {
+            models_size *= 2;
+            models = (struct model **) realloc(models, models_size * sizeof(struct model *));
+            if (models == nullptr) 
+            {
+                perror("Error allocating memory to models in add_object\n");
+                return nullptr;
+            }
+        }
+
+        imported_model = load_model("arrow.json"); //FIXME:
+        models[num_of_models-1] = &imported_model;
+        obj->model = &imported_model;
+
+        //////////////////////////////////////
+        vec4 *vertices;
+        int len;
+        to_point_array(&vertices, &len, &imported_model.triangles);
+        
+        point_scaler = 0.1;
+        for(int i=0; i<len; i++)
+            vertices[i] = point4(vertices[i].x * point_scaler, vertices[i].y * point_scaler, vertices[i].z * point_scaler, 1.0);
+
+        //////////////////////////////////////
+
+        obj->vao = &(vao[4]); //FIXME: vao must dynamically allocated array
+        obj->buffer = &(buffers[4]);
+        obj->vertices_num = len;
+
+        obj->points_array = vertices;
+
+        //TODO: GET THESE VALUES FROM JSON FILE!!!
+        obj->colors_array = (color4 *) malloc(obj->vertices_num * sizeof(color4)); 
+        if (obj->colors_array == nullptr) 
+            perror("Error allocating memory to curr_object_model->colors_array in draw_objects\n");
+        else
+            std::fill_n(obj->colors_array, obj->vertices_num, color4(0.8, 0.8, 0.8, 1.0)); // FIXME: THIS NEEDS TO CHANGE FOR SHADER_EDITOR
+
+
+        /////////////
+
+        glBindVertexArray(vao[4]);
+        glBindBuffer(GL_ARRAY_BUFFER, buffers[4]);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(point4) * obj->vertices_num + sizeof(color4) * obj->vertices_num, NULL, GL_STATIC_DRAW);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(point4) * obj->vertices_num, obj->points_array);
+        glBufferSubData(GL_ARRAY_BUFFER, sizeof(point4) * obj->vertices_num, sizeof(color4) * obj->vertices_num, obj->colors_array);
+
+        // cube attribute
+        glEnableVertexAttribArray(vPosition);
+        glVertexAttribPointer(vPosition, 4, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+        
+        glEnableVertexAttribArray(vColor);
+        glVertexAttribPointer(vColor, 4, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(sizeof(point4) * obj->vertices_num));
+            
+        /////////////
+
         break;
 
     case Empty:
@@ -413,6 +487,11 @@ void print_all_objects()
     printf("==============================\n");
 }
 
+void create_object_arrows()
+{
+
+}
+
 // create objects, vertex arrays and buffers
 void init()
 {
@@ -424,8 +503,8 @@ void init()
     glGenVertexArrays(VAO_NUM, vao);
     glGenBuffers(VAO_NUM, buffers);
     
-    GLuint vPosition = glGetAttribLocation(program, "vPosition");
-    GLuint vColor = glGetAttribLocation(program, "vColor");
+    vPosition = glGetAttribLocation(program, "vPosition");
+    vColor = glGetAttribLocation(program, "vColor");
 
     int index = 0;
 
@@ -499,8 +578,8 @@ void init()
     
     // Set projection matrix
     GLfloat aspect_ratio = (GLfloat) SCREEN_WIDTH / (GLfloat) SCREEN_HEIGHT;
-    projection = Perspective(fovy, aspect_ratio, 0.1, 15.5);
-    glUniformMatrix4fv(Projection, 1, GL_TRUE, projection);
+    projection_matrix = Perspective(fovy, aspect_ratio, 0.1, 15.5);
+    glUniformMatrix4fv(Projection, 1, GL_TRUE, projection_matrix);
 
     glEnable( GL_DEPTH_TEST );
     glClearColor( 1.0, 1.0, 1.0, 1.0 ); 
@@ -508,11 +587,20 @@ void init()
     // allocate memory for object_models array containing pointers to all object_models
     object_models = (struct object_model **) malloc(object_models_size * sizeof(struct object_model *));
     if (object_models == nullptr) 
-        perror("Error allocating memory to object_model in init\n");
+        perror("Error allocating memory to object_models in init\n");
     else 
     {
         for (int i = 0; i < object_models_size; i++)
             object_models[i] = nullptr;
+    }
+
+    models = (struct model **) malloc(object_models_size * sizeof(struct model *));
+    if (models == nullptr) 
+        perror("Error allocating memory to models in init\n");
+    else 
+    {
+        for (int i = 0; i < object_models_size; i++)
+            models[i] = nullptr;
     }
 
     // create first empty object, this will be selected when background is clicked 
@@ -522,8 +610,8 @@ void init()
 void draw_objects(bool with_picking)
 {
     // camera view matrix
-    view = LookAt(camera_coordinates, camera_coordinates + camera_front, camera_up);
-    glUniformMatrix4fv(View, 1, GL_TRUE, view);
+    view_matrix = LookAt(camera_coordinates, camera_coordinates + camera_front, camera_up);
+    glUniformMatrix4fv(View, 1, GL_TRUE, view_matrix);
 
     struct object_model *curr_object_model;
     GLsizeiptr buf_offset, buf_size;
@@ -542,7 +630,7 @@ void draw_objects(bool with_picking)
             buf_size = curr_object_model->vertices_num * sizeof(color4);
 
             // object model matrix
-            glUniformMatrix4fv(Model, 1, GL_TRUE, curr_object_model->model);
+            glUniformMatrix4fv(Model, 1, GL_TRUE, curr_object_model->model_matrix);
 
             if (with_picking == false)
             {
@@ -613,11 +701,14 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
         if (action == GLFW_PRESS)
             add_object(Sphere);
         break;
-    case GLFW_KEY_B: // add new sphere to screen
+    case GLFW_KEY_B: // add new point light to screen
         if (action == GLFW_PRESS)
             add_object(PointLight);
         break;
-    /* now implemented with mouse click
+    case GLFW_KEY_N: // add new imported object to screen
+        if (action == GLFW_PRESS)
+            add_object(Imported);
+        break;
     case GLFW_KEY_SPACE: // increase selected_model_index
         if (action == GLFW_PRESS)
         {
@@ -632,7 +723,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
                 object_models[selected_model_index]->is_selected = true;
         }
         break;
-    */
+
     case GLFW_KEY_P:
         if (action == GLFW_PRESS)
             print_all_objects();
@@ -866,8 +957,8 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
     else
         fovy_changed = fovy;
 
-    projection = Perspective(fovy_changed, aspect_ratio, 1.8, 5.5);
-    glUniformMatrix4fv(Projection, 1, GL_TRUE, projection);
+    projection_matrix = Perspective(fovy_changed, aspect_ratio, 1.8, 5.5);
+    glUniformMatrix4fv(Projection, 1, GL_TRUE, projection_matrix);
 }
 
 int main(int argc, char *argv[])

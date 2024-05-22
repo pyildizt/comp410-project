@@ -1,21 +1,29 @@
 # Compiler
-CXX = g++
+CXX := g++
 
 # Directories
-DIR_INCLUDE = ../include
+SRCDIR := .
+UTILDIR := ../util
+ZAXDIR := ../extern/zax-parser/src
+INCDIR := ../include
+IMGUI_DIR := ../extern/imgui-1.90.5
 
 # Compiler flags
-CXXFLAGS = -g -Wall -Wextra -std=c++11 $(shell pkg-config --cflags-only-other glfw3 glew)
+CXXFLAGS := -std=c++11 -g $(shell pkg-config --cflags-only-other glfw3 glew)
 
 # Include directories
-INCLUDES = -I$(DIR_INCLUDE) $(shell pkg-config --cflags-only-I glfw3 glew)
+INCLUDES = -I$(INCDIR) -I$(UTILDIR) -I$(ZAXDIR) -I$(IMGUI_DIR) -I$(IMGUI_DIR)/backends $(shell pkg-config --cflags-only-I glfw3 glew)
+
 # Include MACOS frameworks
 FRAMEWORKS = -framework OpenGL -framework Cocoa -framework IOKit
+
 # Libraries
 LIBS = $(shell pkg-config --libs glfw3 glew)
 
 # Source files
-SRCS = main.cpp InitShader.cpp
+SRCS := $(wildcard $(SRCDIR)/*.cpp) $(wildcard $(UTILDIR)/*.cpp) $(wildcard $(ZAXDIR)/*.cpp)
+SRCS += $(IMGUI_DIR)/imgui.cpp $(IMGUI_DIR)/imgui_demo.cpp $(IMGUI_DIR)/imgui_draw.cpp $(IMGUI_DIR)/imgui_tables.cpp $(IMGUI_DIR)/imgui_widgets.cpp
+SRCS += $(IMGUI_DIR)/backends/imgui_impl_glfw.cpp $(IMGUI_DIR)/backends/imgui_impl_opengl3.cpp
 
 # Object files
 OBJS := $(SRCS:.cpp=.o)
@@ -25,13 +33,12 @@ EXEC := scene_builder
 
 .PHONY: all clean
 
-# Default rule
+# Default target
 all: $(EXEC)
 
 # Linking
 $(EXEC): $(OBJS)
-	$(CXX) $(CXXFLAGS) $(OBJS) -o $(EXEC) $(LIBS) $(FRAMEWORKS)
-	rm $(OBJS)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIBS) $(FRAMEWORKS)
 
 # Compiling
 %.o: %.cpp
