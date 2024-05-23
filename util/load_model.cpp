@@ -102,8 +102,8 @@ std::vector<triangle> load_triangles(std::string path) {
     t.p1 = triangle_points[(i * 3) + 1];
     t.p2 = triangle_points[(i * 3) + 2];
     t.uv0 = vec2(0, 0);
-    t.uv1 = vec2(0, 1);
-    t.uv2 = vec2(1, 0);
+    t.uv1 = vec2(1, 0);
+    t.uv2 = vec2(0, 1);
     ret.push_back(t);
   }
   free(triangle_points);
@@ -120,4 +120,21 @@ model load_model_with_default_material(std::vector<triangle> triangles) {
   ret.triangles = triangles;
   ret.material = material_properties();
   return ret;
+}
+
+
+void renormalizeUVs(model* _model){
+  for (int i = 0; i < _model->triangles.size(); i++) {
+    triangle* t = &_model->triangles.at(i);
+    auto uv0 = t->uv0;
+    auto uv1 = t->uv1;
+    auto uv2 = t->uv2;
+    // check if uv normal is backward
+    vec2 d1 = vec2(uv1 - uv0);
+    vec2 d2 = vec2(uv2 - uv0);
+    if (d1.x * d2.y - d1.y * d2.x < 0) {
+      t->uv1 = uv2;
+      t->uv2 = uv1;
+    }
+  }
 }

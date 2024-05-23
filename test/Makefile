@@ -10,6 +10,9 @@ INCDIR := ../include
 # Compiler flags
 CXXFLAGS := -std=c++11 -I$(INCDIR) -I$(UTILDIR) -I$(ZAXDIR) -ggdb
 
+LDFLAGS := -lGLEW -lGL -lglfw -lpng
+
+
 # Source files
 SRCS := $(wildcard $(SRCDIR)/*.cpp) $(wildcard $(UTILDIR)/*.cpp) $(wildcard $(ZAXDIR)/*.cpp)
 
@@ -26,7 +29,7 @@ all: $(EXEC)
 
 # Linking
 $(EXEC): $(OBJS)
-	$(CXX) $(CXXFLAGS) $^ -o $@
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 # Compiling
 %.o: %.cpp

@@ -11,6 +11,11 @@ uniform vec4 specularProperty;
 uniform float shininess;
 uniform int isEdge;
 uniform float isFakeDisplay;
+
+in vec4 UVpos;
+out vec4 UV;
+
+
 in vec4 vColor;
 out vec4 normal;
 out vec4 wcolor;
@@ -28,6 +33,7 @@ uniform vec4 lightPosition;
 
 void main()
 {
+    UV = UVpos;
     if(isFakeDisplay <= .9){
     // Transform vertex position into camera (eye) coordinates
     vec3 pos = (Transform * vPosition).xyz;
