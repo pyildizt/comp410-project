@@ -75,7 +75,8 @@ mat4 arrow_model_matrices[3];
 
 enum {Xaxis = 0, Yaxis = 1, Zaxis = 2, NumAxes = 3};
 enum ObjectType {Cube, Sphere, Imported, PointLight, Empty};
-
+enum SelectedAction {NoAction, TranslateObject, ScaleObject, RotateObject};
+SelectedAction selected_action = NoAction;
 struct object_model
 {
     enum ObjectType object_type;
@@ -83,6 +84,7 @@ struct object_model
 
     vec3 object_coordinates;
     mat4 model_matrix;
+    mat4 rotation_matrix;
     GLfloat Theta[NumAxes];
     GLfloat Scaling[NumAxes];
     GLfloat Translation[NumAxes];
@@ -110,7 +112,7 @@ struct object_model *empty_object;
 struct object_model **object_models;
 int object_models_size = 10;
 
-/* CUBE, SPHERE */
+/* CUBE, SPHERES, ARROW */
 const int num_vertices_for_cube = 36;
 const int num_vertices_for_sphere = 3*(4*((4*4*4*4))); // corresponds to create_sphere(4)
 const int num_vertices_for_point_light = 3*(4*((4*4*4))); // corresponds to create_sphere(3)
@@ -131,7 +133,6 @@ color4 colors_cube[num_vertices_for_cube];
 vec4 points_arrow[ARROW_VERTICES_NUM];
 color4 colors_arrow[3][ARROW_VERTICES_NUM];
 color4 picking_colors_arrow[3][ARROW_VERTICES_NUM];
-
 
 // Vertices of a unit cube centered at origin, sides aligned with axes
 point4 cube_vertices[8] = {
@@ -253,19 +254,46 @@ void create_object_matrices(struct object_model *obj)
             }
             else
             {
-                rotation_matrix =   Translate(translation) * 
-                                    RotateX(obj->Theta[Xaxis]) * 
+                rotation_matrix =   RotateX(obj->Theta[Xaxis]) * 
                                     RotateY(obj->Theta[Yaxis]) *
-                                    RotateZ(obj->Theta[Zaxis]) * 
-                                    Translate(-translation);
+                                    RotateZ(obj->Theta[Zaxis]);
                 
-                scaling_matrix =    Translate(translation) * 
-                                    Scale((1.0 + obj->Scaling[Xaxis]), 
+                scaling_matrix =    Scale((1.0 + obj->Scaling[Xaxis]), 
                                         (1.0 + obj->Scaling[Yaxis]), 
-                                        (1.0 + obj->Scaling[Zaxis])) * 
-                                    Translate(-translation);
+                                        (1.0 + obj->Scaling[Zaxis]));
+                
+                // This is to make rotation around fixed global axes
+                obj->rotation_matrix = rotation_matrix * obj->rotation_matrix;
+                obj->model_matrix = Translate(translation) * obj->rotation_matrix * scaling_matrix;
+            }
 
-                obj->model_matrix = rotation_matrix * scaling_matrix * Translate(translation);
+            // make matrices of x, y, z arrows respectively
+            float distance_from_object = 0.2f;
+            if (obj->object_type == PointLight)
+                distance_from_object = 0.05f;
+                
+            switch (selected_action)
+            {
+            case NoAction:
+                break;
+            
+            case TranslateObject:
+                arrow_model_matrices[0] = Translate(translation) * Translate(distance_from_object, 0, 0) * RotateZ(-90.0f);
+                arrow_model_matrices[1] = Translate(translation) * Translate(0, distance_from_object, 0);
+                arrow_model_matrices[2] = Translate(translation) * Translate(0, 0, distance_from_object) * RotateX(90.0f);
+                break;
+
+            case ScaleObject:
+                arrow_model_matrices[0] = rotation_matrix * Translate(translation) * Translate(distance_from_object, 0, 0) * RotateZ(-90.0f);
+                arrow_model_matrices[1] = rotation_matrix * Translate(translation) * Translate(0, distance_from_object, 0);
+                arrow_model_matrices[2] = rotation_matrix * Translate(translation) * Translate(0, 0, distance_from_object) * RotateX(90.0f);
+                break;
+
+            case RotateObject:
+                arrow_model_matrices[0] = Translate(translation) * Translate(0, 0, distance_from_object) * RotateZ(-90.0f);
+                arrow_model_matrices[1] = Translate(translation) * Translate(distance_from_object, 0, 0);
+                arrow_model_matrices[2] = Translate(translation) * Translate(0, distance_from_object, 0) * RotateZ(-90.0f);
+                break;
             }
         }
     }   
@@ -273,16 +301,11 @@ void create_object_matrices(struct object_model *obj)
 
 void draw_object_arrows(struct object_model *obj, bool with_picking)
 {
-    // x, y, z arrows respectively
-    float distance_from_object = 0.15f;
-    arrow_model_matrices[0] = obj->model_matrix * Translate(distance_from_object, 0, 0) * RotateZ(-90.0f);
-    arrow_model_matrices[1] = obj->model_matrix * Translate(0, distance_from_object, 0);
-    arrow_model_matrices[2] = obj->model_matrix * Translate(0, 0, distance_from_object) * RotateX(90.0f);
-
     glBindVertexArray(vao[ARROW_INDEX]);
     glBindBuffer(GL_ARRAY_BUFFER, buffers[ARROW_INDEX]);
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
+    // x-axis arrow
     if (with_picking)
         glBufferSubData(GL_ARRAY_BUFFER, sizeof(points_arrow), sizeof(picking_colors_arrow[0]), picking_colors_arrow[0]);
     else
@@ -290,6 +313,7 @@ void draw_object_arrows(struct object_model *obj, bool with_picking)
     glUniformMatrix4fv(Model, 1, GL_TRUE, arrow_model_matrices[0]);
     glDrawArrays(GL_TRIANGLES, 0, ARROW_VERTICES_NUM);
 
+    // y-axis arrow
     if (with_picking)
         glBufferSubData(GL_ARRAY_BUFFER, sizeof(points_arrow), sizeof(picking_colors_arrow[0]), picking_colors_arrow[1]);
     else
@@ -297,6 +321,7 @@ void draw_object_arrows(struct object_model *obj, bool with_picking)
     glUniformMatrix4fv(Model, 1, GL_TRUE, arrow_model_matrices[1]);
     glDrawArrays(GL_TRIANGLES, 0, ARROW_VERTICES_NUM);
 
+    // z-axis arrow
     if (with_picking)
         glBufferSubData(GL_ARRAY_BUFFER, sizeof(points_arrow), sizeof(picking_colors_arrow[0]), picking_colors_arrow[2]);
     else
@@ -316,13 +341,10 @@ struct model load_model(std::string filename)
     serializable_model smodel;
     smodel.zax_from_json(json.c_str());
 
-    printf("model loaded\n");
-
-    // std::cout << "Loaded Model: " << smodel << std::endl;
-
     return to_model(smodel);
 }
 
+// Add object button function, if obj_type == Imported then filename string "exmaple.json" with path must be provided
 struct object_model *add_object(ObjectType obj_type, std::string filename)
 {
     num_of_objects++;
@@ -352,6 +374,7 @@ struct object_model *add_object(ObjectType obj_type, std::string filename)
     obj->model = nullptr;
     obj->object_coordinates = vec3(0.0f, 0.0f, 0.0f);
     obj->model_matrix = Translate(0.0, 0.0, inital_z_placement);
+    obj->rotation_matrix = mat4(1.0f);
     std::fill_n(obj->Theta, 3, 0.0f);
     std::fill_n(obj->Scaling, 3, 0.0f);
     std::fill_n(obj->Translation, 3, 0.0f);
@@ -392,28 +415,26 @@ struct object_model *add_object(ObjectType obj_type, std::string filename)
         break;
 
     case Imported:
-
+        // Load model
         imported_model = load_model(filename); 
         obj->model = &imported_model;
 
-        //////////////////////////////////////
         vec4 *vertices;
         int len;
         to_point_array(&vertices, &len, &imported_model.triangles);
         
+        // Scale model because models come in very big
         point_scaler = 0.1;
         for(int i=0; i<len; i++)
             vertices[i] = point4(vertices[i].x * point_scaler, vertices[i].y * point_scaler, vertices[i].z * point_scaler, 1.0);
 
-        //////////////////////////////////////
-
+        // Object vao, buffer, etc.
         glGenVertexArrays(1, &new_vao);
         glGenBuffers(1, &new_buffer);
 
-        obj->vao = new_vao; //FIXME: vao must dynamically allocated array
+        obj->vao = new_vao;
         obj->buffer = new_buffer;
         obj->vertices_num = len;
-
         obj->points_array = vertices;
 
         //TODO: GET THESE VALUES FROM JSON FILE!!!
@@ -423,27 +444,25 @@ struct object_model *add_object(ObjectType obj_type, std::string filename)
         else
             std::fill_n(obj->colors_array, obj->vertices_num, color4(0.8, 0.8, 0.8, 1.0)); // FIXME: THIS NEEDS TO CHANGE FOR SHADER_EDITOR
 
-
-        /////////////
-
+        // Bind vao, buffer here
         glBindVertexArray(new_vao);
         glBindBuffer(GL_ARRAY_BUFFER, new_buffer);
         glBufferData(GL_ARRAY_BUFFER, sizeof(point4) * obj->vertices_num + sizeof(color4) * obj->vertices_num, NULL, GL_STATIC_DRAW);
         glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(point4) * obj->vertices_num, obj->points_array);
         glBufferSubData(GL_ARRAY_BUFFER, sizeof(point4) * obj->vertices_num, sizeof(color4) * obj->vertices_num, obj->colors_array);
 
-        // cube attribute
+        // object attributes
         glEnableVertexAttribArray(vPosition);
         glVertexAttribPointer(vPosition, 4, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
-        
         glEnableVertexAttribArray(vColor);
         glVertexAttribPointer(vColor, 4, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(sizeof(point4) * obj->vertices_num));
-            
-        /////////////
 
+        // free vertices since first glBufferSubData already done here
+        free(vertices);
         break;
 
     case Empty:
+        // this is for object selection purposes
         obj->vao = NULL;
         obj->buffer = NULL;
         obj->vertices_num = 0;
@@ -467,8 +486,7 @@ struct object_model *add_object(ObjectType obj_type, std::string filename)
         }   
     }
 
-    create_object_matrices(obj);
-
+    // add object to object_models array
     object_models[num_of_objects-1] = obj;
     std::cout << "Object #" << (num_of_objects-1) << " added: " << *(object_models[num_of_objects-1]) << std::endl;
 
@@ -482,6 +500,7 @@ void transform_object_with_arrows(int x_diff, int y_diff)
     printf("axis selected: %d\n", object_arrow_selected_axis);
 }
 
+// free all memory at quit
 void delete_all_objects()
 {
     struct object_model *obj;
@@ -500,6 +519,7 @@ void delete_all_objects()
     free(object_models);
 }
 
+// free object memory at deletion
 void delete_selected_object()
 {
     struct object_model *obj = object_models[selected_model_index];
@@ -514,11 +534,14 @@ void delete_selected_object()
             free(obj->colors_array);
         free(obj);
     }   
+    // also remove object from object_models array but do not change num_of_objects
     object_models[selected_model_index] = nullptr;
 
+    // make object selection empty
     selected_model_index = 0;
 }
 
+// for debugging
 void print_all_objects()
 {
     printf("==============================\n");
@@ -530,6 +553,7 @@ void print_all_objects()
     printf("==============================\n");
 }
 
+// load and create the arrow model for object transformation
 void create_arrow()
 {
     model arrow_model = load_model(ARROW_PATH);
@@ -697,11 +721,12 @@ void draw_objects(bool with_picking)
             // object model matrix
             glUniformMatrix4fv(Model, 1, GL_TRUE, curr_object_model->model_matrix);
 
+            // if not picking draw objects normally
             if (with_picking == false)
             {
+                // if object not selected then just draw it solid with its own color
                 glBufferSubData(GL_ARRAY_BUFFER, buf_offset, buf_size, curr_object_model->colors_array);
             
-                // if object not selected then just draw it solid with its own color
                 glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
                 glDrawArrays(GL_TRIANGLES, 0, curr_object_model->vertices_num);
 
@@ -716,17 +741,17 @@ void draw_objects(bool with_picking)
                     }
                     std::fill_n(selected_color_array, curr_object_model->vertices_num, color4(0.0, 0.0, 0.0, 1.0));
                     glBufferSubData(GL_ARRAY_BUFFER, buf_offset, buf_size, selected_color_array);
+                    free(selected_color_array);
 
                     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
                     glDrawArrays(GL_TRIANGLES, 0, curr_object_model->vertices_num);
                     
-                    free(selected_color_array);
-
                     // draw 3 arrows on the object
                     draw_object_arrows(curr_object_model, with_picking);
                 }
             }
-            else // if with picking then just draw all objects with their unique picking colors
+            // if with picking then just draw all objects with their unique picking colors
+            else 
             {
                 glBufferSubData(GL_ARRAY_BUFFER, buf_offset, buf_size, curr_object_model->picking_colors_array);
                 
@@ -805,6 +830,22 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
             delete_selected_object();
         break;
 
+    case GLFW_KEY_J: // TODO: press translate button
+        if (action == GLFW_PRESS)
+            selected_action = TranslateObject;
+        printf("selected_action: %d\n", selected_action);
+        break;
+    case GLFW_KEY_K: // TODO: press scale button
+        if (action == GLFW_PRESS)
+            selected_action = ScaleObject;
+        printf("selected_action: %d\n", selected_action);
+        break;
+    case GLFW_KEY_L: // TODO: press rotate button
+        if (action == GLFW_PRESS)
+            selected_action = RotateObject;
+        printf("selected_action: %d\n", selected_action);
+        break;
+
     // WASD and Mouse for camera movement (while right mouse button is being pressed)
     // Arrow keys for selected object movement
     // Left-Right: Translate in X, Up-Down: Translate in Y, Shift+Up-Down: Translate in Z
@@ -869,23 +910,29 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     case GLFW_KEY_1:
         if (action == GLFW_PRESS || action == GLFW_REPEAT) 
             if (mods & GLFW_MOD_SHIFT)
-                object_models[selected_model_index]->Theta[Xaxis] -= 1.0;
+                object_models[selected_model_index]->Theta[Xaxis] = -1.0;
             else
-                object_models[selected_model_index]->Theta[Xaxis] += 1.0;   
+                object_models[selected_model_index]->Theta[Xaxis] = 1.0;   
+        if (action == GLFW_RELEASE)
+            object_models[selected_model_index]->Theta[Xaxis] = 0.0;
         break;
     case GLFW_KEY_2:  
         if (action == GLFW_PRESS || action == GLFW_REPEAT) 
             if (mods & GLFW_MOD_SHIFT)
-                object_models[selected_model_index]->Theta[Yaxis] -= 1.0;   
+                object_models[selected_model_index]->Theta[Yaxis] = -1.0;   
             else
-                object_models[selected_model_index]->Theta[Yaxis] += 1.0;   
+                object_models[selected_model_index]->Theta[Yaxis] = 1.0;  
+        if (action == GLFW_RELEASE)
+            object_models[selected_model_index]->Theta[Yaxis] = 0.0; 
         break;
     case GLFW_KEY_3:    
         if (action == GLFW_PRESS || action == GLFW_REPEAT) 
             if (mods & GLFW_MOD_SHIFT)
-                object_models[selected_model_index]->Theta[Zaxis] -= 1.0;   
+                object_models[selected_model_index]->Theta[Zaxis] = -1.0;   
             else
-                object_models[selected_model_index]->Theta[Zaxis] += 1.0;   
+                object_models[selected_model_index]->Theta[Zaxis] = 1.0;  
+        if (action == GLFW_RELEASE)
+            object_models[selected_model_index]->Theta[Zaxis] = 0.0; 
         break;
 
     // Scale object:
@@ -924,11 +971,12 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 {
     if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT)
     {
-        //For picking
+        // For picking
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         draw_objects(true);
         glFlush();
         
+        // get mouse position
         double xpos, ypos;
         glfwGetCursorPos(window, &xpos, &ypos);
         int fb_width, fb_height;
@@ -940,11 +988,13 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
         ypos*=(fb_height/win_height);
         ypos = fb_height - ypos;
                 
+        // get pixel color at mouse position
         unsigned char pixel[4];
         glReadPixels(xpos, ypos, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel);
         vec4 color = vec4(pixel[0] / 255.0, pixel[1] / 255.0, pixel[2] / 255.0, 1.0);
         int index = UNIQUE_COLOR_TO_INT(color) - 4;
 
+        // if an object is selected change selected_model_index
         if (0 <= index-1 && index-1 < num_of_objects)
         {
             object_models[selected_model_index]->is_selected = false;
@@ -972,6 +1022,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
         object_arrow_selected = false;
         if (!right_click_released_once)
         {
+            // remember last view rotations
             last_yaw = yaw;
             last_pitch = pitch;
         }
@@ -997,6 +1048,7 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
        
     if (right_click_released_once)
     {
+        // remember last view rotations
         yaw = last_yaw + x_pos_diff;
         pitch = last_pitch - y_pos_diff;
     }
@@ -1006,11 +1058,13 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
         pitch -= y_pos_diff;
     }
 
+    // so that camera does not turn upside down
     if (pitch > 89.9)
         pitch = 89.9;
     if (pitch < -89.9)
         pitch = -89.9;
   
+    // only change view if right_click_holding
     if (right_click_holding)
     {
         vec3 front;
