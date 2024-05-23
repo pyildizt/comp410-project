@@ -58,6 +58,32 @@ struct triangle {
   vec2 uv0;
   vec2 uv1;
   vec2 uv2;
+
+  vec4* vget(int i) {
+    switch (i) {
+    case 0:
+      return &p0;
+    case 1:
+      return &p1;
+    case 2:
+      return &p2;
+    default:
+      return nullptr;
+    }
+  }
+
+  vec2* uget(int i) {
+    switch (i) {
+    case 0:
+      return &uv0;
+    case 1:
+      return &uv1;
+    case 2:
+      return &uv2;
+    default:
+      return nullptr;
+    }
+  }
 };
 
 triangle to_triangle(serializable_triangle s);
@@ -72,7 +98,7 @@ struct material_properties {
 
   material_properties() {
     // default gray material
-    ambient = vec4(0.2, 0.2, 0.2, 1.0);
+    ambient = vec4(0.4, 0.4, 0.4, 1.0);
     diffuse = vec4(0.8, 0.8, 0.8, 1.0);
     specular = vec4(0.3, 0.3, 0.3, 1.0);
     shininess = 10.0;
@@ -135,6 +161,16 @@ model json_to_model(std::string json);
  * @param triangles IN: vector of triangles
  */
 void to_point_array(vec4 **points, int *len, std::vector<triangle> *triangles);
+
+/**
+ * @brief Converts a vector of triangles to a point array to be used in opengl with their UV coordinates.
+ * Don't forget to free the memory allocated for the points array afterwards.
+ *
+ * @param points OUT: array of points to be used in opengl
+ * @param triangles IN: vector of triangles
+ */
+void to_point_array_uv(vec2 **points, std::vector<triangle> *triangles);
+
 
 /**
  * @brief Generates normals for the model and puts them in the normals array.

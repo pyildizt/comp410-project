@@ -116,6 +116,15 @@ void to_point_array(vec4** points, int* len, std::vector<triangle>* triangles){
     }
 }
 
+void to_point_array_uv(vec2 **points, std::vector<triangle> *triangles){
+    *points = (vec2 *)calloc(triangles->size() * 3, sizeof(vec2));
+    for (int i = 0; i < triangles->size(); i++) {
+        (*points)[i * 3] = (*triangles)[i].uv0;
+        (*points)[i * 3 + 1] = (*triangles)[i].uv1;
+        (*points)[i * 3 + 2] = (*triangles)[i].uv2;
+    }
+}
+
 void generate_normals(vec4 *normals, const model *m, bool smooth){
     if(smooth){
         generate_smooth_normals(normals, m);
@@ -245,7 +254,6 @@ void generate_smooth_normals(vec4 *normals, const model *m) {
           normals[(i * 3) + j] =
               normal / normal_size_map[HASH_VEC4(points[j], max_val, min_val)];
           normals[(i * 3) + j].w = 0;
-          std::cout << "NORMAL: " << normals[(i * 3) + j] << std::endl;
         }
     }
     free(normal_temp);
@@ -266,5 +274,10 @@ void invert_normals(model* m){
       vec4 temp = m->triangles[i].p1;
       m->triangles[i].p1 = m->triangles[i].p2;
       m->triangles[i].p2 = temp;
+      // also invert UVs
+      // vec2 temp_uv = m->triangles[i].uv1;
+      // m->triangles[i].uv1 = m->triangles[i].uv2;
+      // m->triangles[i].uv2 = temp_uv;
     }
 }
+

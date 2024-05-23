@@ -11,7 +11,7 @@ IMGUI_DIR := ../extern/imgui-1.90.5
 # Compiler flags
 CXXFLAGS := -std=c++11 -I$(INCDIR) -I$(UTILDIR) -I$(ZAXDIR) -I$(IMGUI_DIR) -I$(IMGUI_DIR)/backends -ggdb
 
-LDFLAGS := -lGLEW -lGL -lglfw
+LDFLAGS := -lGLEW -lGL -lglfw -lpng
 
 # Source files
 SRCS := $(wildcard $(SRCDIR)/*.cpp) $(wildcard $(UTILDIR)/*.cpp) $(wildcard $(ZAXDIR)/*.cpp)
@@ -37,6 +37,12 @@ $(EXEC): $(OBJS)
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
+rutil:
+	rm -f $(UTILDIR)/*.o
+
 # Clean
 clean:
 	rm -f $(OBJS) $(EXEC)
+
+run: $(EXEC)
+	./$(EXEC)
