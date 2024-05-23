@@ -1,6 +1,9 @@
 #include "Angel.h"
 #include "data_types.hpp"
 #include "load_model.hpp"
+#include "imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_opengl3.h"
 #include <stdlib.h>
 #include <time.h>
 #include <math.h>
@@ -785,8 +788,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 {
     switch(key) 
     {
-    case GLFW_KEY_ESCAPE: //delete all objects and quit
-        delete_all_objects(); 
+    case GLFW_KEY_ESCAPE: // quit
         exit(EXIT_SUCCESS);
         break;
 
@@ -1120,8 +1122,20 @@ int main(int argc, char *argv[])
     glfwSetCursorPosCallback(window, mouse_callback);
     glfwSetMouseButtonCallback(window, mouse_button_callback);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO &io = ImGui::GetIO();
+    (void)io;
+    // Setup Dear ImGui style
+    ImGui::StyleColorsLight();
+
+    // Setup Platform/Renderer backends
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
     
     init();
+
+    ImGui_ImplOpenGL3_Init();
 
     double frameRate = 60.0, currentTime, previousTime = 0.0;
     while (!glfwWindowShouldClose(window))
@@ -1135,6 +1149,44 @@ int main(int argc, char *argv[])
         update();
 
         display();
+
+        ///////
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        int width, height;
+
+        glfwGetWindowSize(window, &width, &height);
+        ImGui::SetNextWindowPos(ImVec2(0, 0));
+        ImGui::SetNextWindowSize(ImVec2(300, height));
+        ImGui::Begin("Button Window", nullptr,
+                    ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                        ImGuiWindowFlags_NoMove |
+                        ImGuiWindowFlags_NoSavedSettings);
+
+        ImGui::BeginChild("Load Model Box", ImVec2(-1, 100), true,
+                        ImGuiWindowFlags_HorizontalScrollbar);
+        ImGui::TextWrapped("Model filename:");
+        static char filename[256] = "";
+        ImGui::InputText("File path:", filename, sizeof(filename));
+        if (ImGui::Button("Load Model"))
+        {
+            printf("hello\n");
+        }
+        ImGui::EndChild();
+
+        if (ImGui::Button("Select All")) {
+            printf("pressed button\n");
+        }
+
+         ImGui::End();
+
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+        //////
+
         if (!display_picking)
             glfwSwapBuffers(window);
         glfwPollEvents();
