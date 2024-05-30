@@ -35,6 +35,7 @@ typedef vec4 point4;
 bool display_picking = false;
 
 /* CAMERA */
+bool left_click_holding = false;
 bool right_click_holding = false;
 bool right_click_released_once = false;
 
@@ -51,18 +52,19 @@ double pitch =  0.0;
 double last_yaw = yaw;
 double last_pitch = pitch;
 
-vec3 camera_coordinates(0.0, 0.0, -2.0);
+vec3 camera_coordinates(0.0, 0.0, -2.0f);
 vec3 camera_front(0.0f, 0.0f, -1.0f);
 vec3 camera_up(0.0f, 1.0f, 0.0f);
+vec3 camera_at(0.0, 0.0, -3.0f);
 
 float camera_speed = 0.05;
 GLfloat fovy = 60.0;
 
 /* OBJECT */
 bool object_arrow_selected = false;
-int object_arrow_selected_axis;
+int object_arrow_selected_axis; //x=1, y=2, z=3
 
-float object_speed = 0.01;
+float object_speed = 0.005;
 float inital_z_placement = -2.8;
 int selected_model_index = 0; // first object model is empty and selected
 int num_of_objects = 0;       // first object model is empty and selected
@@ -287,14 +289,14 @@ void create_object_matrices(struct object_model *obj)
                 break;
 
             case ScaleObject:
-                arrow_model_matrices[0] = rotation_matrix * Translate(translation) * Translate(distance_from_object, 0, 0) * RotateZ(-90.0f);
-                arrow_model_matrices[1] = rotation_matrix * Translate(translation) * Translate(0, distance_from_object, 0);
-                arrow_model_matrices[2] = rotation_matrix * Translate(translation) * Translate(0, 0, distance_from_object) * RotateX(90.0f);
+                arrow_model_matrices[0] = Translate(translation) * obj->rotation_matrix * Translate(distance_from_object, 0, 0) * RotateZ(-90.0f);
+                arrow_model_matrices[1] = Translate(translation) * obj->rotation_matrix * Translate(0, distance_from_object, 0);
+                arrow_model_matrices[2] = Translate(translation) * obj->rotation_matrix * Translate(0, 0, distance_from_object) * RotateX(90.0f);
                 break;
 
             case RotateObject:
-                arrow_model_matrices[0] = Translate(translation) * Translate(0, 0, distance_from_object) * RotateZ(-90.0f);
-                arrow_model_matrices[1] = Translate(translation) * Translate(distance_from_object, 0, 0);
+                arrow_model_matrices[0] = Translate(translation) * Translate(distance_from_object, 0, 0);
+                arrow_model_matrices[1] = Translate(translation) * Translate(0, 0, distance_from_object) * RotateZ(-90.0f);
                 arrow_model_matrices[2] = Translate(translation) * Translate(0, distance_from_object, 0) * RotateZ(-90.0f);
                 break;
             }
@@ -496,13 +498,6 @@ struct object_model *add_object(ObjectType obj_type, std::string filename)
     return obj;
 }
 
-void transform_object_with_arrows(int x_diff, int y_diff)
-{
-    // 0 = x-axis, 1 = y-axis, 2 = z-axis
-    TODO:
-    printf("axis selected: %d\n", object_arrow_selected_axis);
-}
-
 // free all memory at quit
 void delete_all_objects()
 {
@@ -702,7 +697,8 @@ void init()
 void draw_objects(bool with_picking)
 {
     // camera view matrix
-    view_matrix = LookAt(camera_coordinates, camera_coordinates + camera_front, camera_up);
+    camera_at = camera_coordinates + camera_front;
+    view_matrix = LookAt(camera_coordinates, camera_at, camera_up);
     glUniformMatrix4fv(View, 1, GL_TRUE, view_matrix);
 
     struct object_model *curr_object_model;
@@ -769,6 +765,117 @@ void draw_objects(bool with_picking)
     }
 }
 
+// This is used to find the direction of the arrows on the object depending on the viewers perspective
+// It will either return 1 or -1 to be multiplied with the x_mouse_difference
+int find_arrow_direction(bool x_axis)
+{
+    // No need to do it for the y-axis arrow (green one) as it will always be the up vector for the viewer
+
+    // For the x-axis arrow (red one) if camera_z_diff > 0 then x-axis arrow is in same general direction as x-axis
+    if (x_axis)
+    {
+        if (camera_coordinates.z - camera_at.z >= 0)
+            return 1;
+        else
+            return -1;
+    }
+    // For the z-axis arrow (blue one) if camera_x_diff > 0 then z-axis arrow is in same general direction as z-axis
+    else
+    {
+        if (camera_coordinates.x - camera_at.x >= 0)
+            return -1;
+        else
+            return 1;
+    }
+}
+
+void translate_object_using_arrows(double x_pos_diff, double y_pos_diff, int object_arrow_selected_axis)
+{
+    int multiplier;
+    switch (object_arrow_selected_axis)
+    {
+    case 1: // x-axis
+        multiplier = find_arrow_direction(true);
+        object_models[selected_model_index]->Translation[Xaxis] += object_speed * multiplier * x_pos_diff;
+        break;
+    
+    case 2: // y-axis
+        multiplier = -1;
+        object_models[selected_model_index]->Translation[Yaxis] += object_speed * multiplier * y_pos_diff;
+        break;
+
+    case 3: // z-axis
+        multiplier = find_arrow_direction(false);
+        object_models[selected_model_index]->Translation[Zaxis] += object_speed * multiplier * x_pos_diff;
+        break;
+    }
+}
+
+void rotate_object_using_arrows(double x_pos_diff, double y_pos_diff, int object_arrow_selected_axis)
+{
+    int multiplier;
+    switch (object_arrow_selected_axis)
+    {
+    case 1: // x-axis (red arrow)
+        multiplier = find_arrow_direction(true);
+        object_models[selected_model_index]->Theta[Xaxis] = multiplier * y_pos_diff;  
+        break;
+    
+    case 2: // y-axis (green arrow)
+        multiplier = -1 * find_arrow_direction(false);
+        object_models[selected_model_index]->Theta[Yaxis] = multiplier * x_pos_diff;  
+        break;
+
+    case 3: // z-axis (blue arrow)
+        multiplier = -1 * find_arrow_direction(true);
+        object_models[selected_model_index]->Theta[Zaxis] = multiplier * x_pos_diff;  
+        break;
+    }
+}
+
+void scale_object_using_arrows(double x_pos_diff, double y_pos_diff, int object_arrow_selected_axis)
+{
+    switch (object_arrow_selected_axis)
+    {
+    case 1: // x-axis
+
+        break;
+    
+    case 2: // y-axis
+
+        break;
+
+    case 3: // z-axis
+
+        break;
+    }
+}
+
+void transform_object_with_arrows(double x_diff, double y_diff)
+{
+    // 0 = x-axis, 1 = y-axis, 2 = z-axis
+    TODO:
+    printf("axis selected: %d\n", object_arrow_selected_axis);
+
+    switch (selected_action)
+    {
+    case NoAction:
+        break;
+    
+    case TranslateObject:
+        translate_object_using_arrows(x_diff, y_diff, object_arrow_selected_axis);
+        break;
+
+    case ScaleObject:
+        scale_object_using_arrows(x_diff, y_diff, object_arrow_selected_axis);
+        break;
+    
+    case RotateObject:
+        rotate_object_using_arrows(x_diff, y_diff, object_arrow_selected_axis);
+        break;
+    }
+}
+
 void display()
 {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -782,6 +889,10 @@ void update()
 {
     // only update the model matrix of the selected object
     create_object_matrices(object_models[selected_model_index]); 
+
+    object_models[selected_model_index]->Theta[Xaxis] = 0.0;
+    object_models[selected_model_index]->Theta[Yaxis] = 0.0;
+    object_models[selected_model_index]->Theta[Zaxis] = 0.0;
 }
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
@@ -791,6 +902,18 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     case GLFW_KEY_ESCAPE: // quit
         exit(EXIT_SUCCESS);
         break;
+
+    case GLFW_KEY_T: //FIXME: DELETE THIS CODE
+        if (action == GLFW_PRESS)
+        {
+            printf("camera_coordinates: (%.2f, %.2f, %.2f), camera_front: (%.2f, %.2f, %.2f), camera_at: (%.2f, %.2f, %.2f)\n", 
+                            camera_coordinates.x, camera_coordinates.y, camera_coordinates.z, 
+                            camera_front.x, camera_front.y, camera_front.z, 
+                            (camera_coordinates + camera_front).x, (camera_coordinates + camera_front).y, (camera_coordinates + camera_front).z);
+        }
+        break;
+
+    
 
     case GLFW_KEY_C: // add new cube to screen
         if (action == GLFW_PRESS)
@@ -973,6 +1096,8 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 {
     if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT)
     {
+        left_click_holding = true;
+
         // For picking
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         draw_objects(true);
@@ -996,6 +1121,8 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
         vec4 color = vec4(pixel[0] / 255.0, pixel[1] / 255.0, pixel[2] / 255.0, 1.0);
         int index = UNIQUE_COLOR_TO_INT(color) - 4;
 
+        object_arrow_selected = false;
+
         // if an object is selected change selected_model_index
         if (0 <= index-1 && index-1 < num_of_objects)
         {
@@ -1007,11 +1134,15 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
         else if (0 <= index+4 && index+4 <= 3) 
         {
             object_arrow_selected = true;
-            object_arrow_selected_axis = index+4;
+            object_arrow_selected_axis = index+4; //x=1, y=2, z=3
         }
         
         if (display_picking)
             glfwSwapBuffers(window);
+    }
+    else if (action == GLFW_RELEASE && button == GLFW_MOUSE_BUTTON_LEFT)
+    {
+        left_click_holding = false;
     }
     if ((action == GLFW_PRESS || action == GLFW_REPEAT) && button == GLFW_MOUSE_BUTTON_RIGHT)
     {
@@ -1076,11 +1207,10 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
         camera_front = normalize(front);       
     }
 
-    if (object_arrow_selected)
+    if (object_arrow_selected && left_click_holding)
     {
         transform_object_with_arrows(x_pos_diff, y_pos_diff);
     }
-        
 }
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)

@@ -9,16 +9,16 @@ INCDIR := ../include
 IMGUI_DIR := ../extern/imgui-1.90.5
 
 # Compiler flags
-CXXFLAGS := -std=c++11 -g $(shell pkg-config --cflags-only-other glfw3 glew)
+CXXFLAGS := -std=c++11 -g $(shell pkg-config --cflags-only-other glfw3 glew libpng)
 
 # Include directories
-INCLUDES = -I$(INCDIR) -I$(UTILDIR) -I$(ZAXDIR) -I$(IMGUI_DIR) -I$(IMGUI_DIR)/backends $(shell pkg-config --cflags-only-I glfw3 glew)
+INCLUDES = -I$(INCDIR) -I$(UTILDIR) -I$(ZAXDIR) -I$(IMGUI_DIR) -I$(IMGUI_DIR)/backends $(shell pkg-config --cflags-only-I glfw3 glew libpng)
 
 # Include MACOS frameworks
 FRAMEWORKS = -framework OpenGL -framework Cocoa -framework IOKit
 
 # Libraries
-LIBS = $(shell pkg-config --libs glfw3 glew)
+LIBS = $(shell pkg-config --libs glfw3 glew libpng)
 
 # Source files
 SRCS := $(wildcard $(SRCDIR)/*.cpp) $(wildcard $(UTILDIR)/*.cpp) $(wildcard $(ZAXDIR)/*.cpp)
