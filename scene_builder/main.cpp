@@ -926,26 +926,9 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
         }
         break;
 
-    case GLFW_KEY_P:
+    case GLFW_KEY_P: //for debugging
         if (action == GLFW_PRESS)
             print_all_objects();
-        break;
-    case GLFW_KEY_BACKSPACE: //delete selected object
-        if (action == GLFW_PRESS)
-            delete_selected_object();
-        break;
-
-    case GLFW_KEY_J: // TODO: press translate button
-        if (action == GLFW_PRESS)
-            selected_action = TranslateObject;
-        break;
-    case GLFW_KEY_K: // TODO: press scale button
-        if (action == GLFW_PRESS)
-            selected_action = ScaleObject;
-        break;
-    case GLFW_KEY_L: // TODO: press rotate button
-        if (action == GLFW_PRESS)
-            selected_action = RotateObject;
         break;
 
     // WASD and Mouse for camera movement (while right mouse button is being pressed)
@@ -1010,6 +993,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
         // if an object is selected change selected_model_index
         if (0 <= index-1 && index-1 < num_of_objects)
         {
+            selected_action = NoAction;
             object_models[selected_model_index]->is_selected = false;
             selected_model_index = index-1;
             object_models[selected_model_index]->is_selected = true;
@@ -1154,14 +1138,7 @@ int main(int argc, char *argv[])
     double frameRate = 60.0, currentTime, previousTime = 0.0;
     while (!glfwWindowShouldClose(window))
     {
-        currentTime = glfwGetTime();
-        if (currentTime - previousTime > 1.0/frameRate)
-        {
-            previousTime = currentTime;
-            // update();
-        }
         update();
-
         display();
 
         ///////
@@ -1183,18 +1160,52 @@ int main(int argc, char *argv[])
                         ImGuiWindowFlags_HorizontalScrollbar);
         ImGui::TextWrapped("Model filename:");
         static char filename[256] = "";
-        ImGui::InputText("File path:", filename, sizeof(filename));
+        ImGui::InputText("File path", filename, sizeof(filename));
+        
         if (ImGui::Button("Load Model"))
         {
-            printf("hello\n");
+            //TODO:
+            printf("load model button pressed\n");
         }
         ImGui::EndChild();
 
-        if (ImGui::Button("Select All")) {
-            printf("pressed button\n");
-        }
+        ImGui::BeginChild("???? Box", ImVec2(-1, 100), true,
+                        ImGuiWindowFlags_HorizontalScrollbar);
 
-         ImGui::End();
+        if (ImGui::Button("??? Shader sth"))
+        {
+            //TODO:
+            printf("shader editor open button pressed\n");
+        }
+        if (ImGui::Button("Duplicate Object"))
+        {
+            //TODO:
+            printf("duplicate object button pressed\n");
+        }
+        if (ImGui::Button("Delete Object"))
+        {
+            delete_selected_object();
+        }
+        ImGui::EndChild();
+
+        ImGui::BeginChild("Transform Object Box", ImVec2(-1, 100), true,
+                        ImGuiWindowFlags_HorizontalScrollbar);
+
+        if (ImGui::Button("Move Object"))
+        {
+            selected_action = TranslateObject;
+        }
+        if (ImGui::Button("Scale Object"))
+        {
+            selected_action = ScaleObject;
+        }
+        if (ImGui::Button("Rotate Object"))
+        {
+            selected_action = RotateObject;
+        }
+        ImGui::EndChild();
+
+        ImGui::End();
 
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
