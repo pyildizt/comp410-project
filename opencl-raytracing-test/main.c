@@ -573,9 +573,7 @@ typedef struct {
 } CIE1931;
 // Placeholder function for CIE 1931 color matching functions
 void wavelength_to_xyz(double wavelength, double *x_bar, double *y_bar, double *z_bar);
-void wavelength_to_xyz(
-    double wavelength, double *x_bar, double *y_bar,
-    double *z_bar) { // this function and data are obtained from chatgpt
+void wavelength_to_xyz(double wavelength, double *x_bar, double *y_bar,double *z_bar) { // this function and data are obtained from chatgpt
   // Replace this function with actual CIE 1931 color matching functions
   // Example: return x_bar, y_bar, z_bar for the given wavelength
   // This example uses placeholder values and should be replaced with real data.
@@ -614,10 +612,34 @@ void wavelength_to_xyz(
       {690, 0.022700, 0.008210, 0.000000}, {695, 0.015840, 0.005723, 0.000000},
       {700, 0.011359, 0.004102, 0.000000},
   };
-  *x_bar = 0.1;
-  *y_bar = 0.2;
-  *z_bar = 0.3;
+      // Find the closest wavelength in the CIE data
+    int i = 0;
+    while (cie_data[i].wavelength < wavelength) {
+        i++;
+        if (i >= sizeof(cie_data) / sizeof(cie_data[0])) {
+            i = sizeof(cie_data) / sizeof(cie_data[0]) - 1;
+            break;
+        }
+    }
+    // the following 15 lines are taken from ChatGPT
+    // Interpolate to get the corresponding x_bar, y_bar, z_bar
+    if (i == 0) {
+        *x_bar = cie_data[0].x_bar;
+        *y_bar = cie_data[0].y_bar;
+        *z_bar = cie_data[0].z_bar;
+    } else if (i >= sizeof(cie_data) / sizeof(cie_data[0])) {
+        *x_bar = cie_data[sizeof(cie_data) / sizeof(cie_data[0]) - 1].x_bar;
+        *y_bar = cie_data[sizeof(cie_data) / sizeof(cie_data[0]) - 1].y_bar;
+        *z_bar = cie_data[sizeof(cie_data) / sizeof(cie_data[0]) - 1].z_bar;
+    } else {
+        double ratio = (wavelength - cie_data[i - 1].wavelength) / (cie_data[i].wavelength - cie_data[i - 1].wavelength);
+        *x_bar = cie_data[i - 1].x_bar + (cie_data[i].x_bar - cie_data[i - 1].x_bar) * ratio;
+        *y_bar = cie_data[i - 1].y_bar + (cie_data[i].y_bar - cie_data[i - 1].y_bar) * ratio;
+        *z_bar = cie_data[i - 1].z_bar + (cie_data[i].z_bar - cie_data[i - 1].z_bar) * ratio;
+    }
 }
+
+// the following 4 functions ro convert a spectrum to an RGB value are taken from ChatGPT
 void spectral_to_xyz(double *spd, double *wavelengths, int length, double *X, double *Y, double *Z);
 void spectral_to_xyz(double *spd, double *wavelengths, int length, double *X, double *Y, double *Z) {
   // Normalize SPD values if not already normalized
@@ -697,8 +719,8 @@ void spectral_to_rgb(double *spd, double *wavelengths, int length, int *R, int *
 }
 
 // ray tracing computations are below
-spectrum_of_light compute_the_ray(ray current_ray, surface_array all_surfaces, triangle_array all_faces, Vector3D light_position, double light_radius, uint *seed, int max_recursion, Vector3D_array *final_plane, int qq); 
-spectrum_of_light compute_the_ray(ray current_ray, surface_array all_surfaces, triangle_array all_faces, Vector3D light_position, double light_radius, uint *seed, int max_recursion, Vector3D_array *final_plane, int qq) {
+spectrum_of_light compute_the_ray(ray current_ray, surface_array* all_surfaces, triangle_array* all_faces, Vector3D light_position, double light_radius, uint *seed, int max_recursion); 
+spectrum_of_light compute_the_ray(ray current_ray, surface_array* all_surfaces, triangle_array* all_faces, Vector3D light_position, double light_radius, uint *seed, int max_recursion) {
 
   
 
@@ -712,9 +734,9 @@ spectrum_of_light compute_the_ray(ray current_ray, surface_array all_surfaces, t
   int triangle_index = -1;
   double minimum_distance_of_ray_to_a_traingle = 999999999;
 
-  for (int a = 0; a < all_faces.total_number_of_triangles; a++) {
-    if (does_triangle_and_ray_intersect_correctly(current_ray, all_faces.all_triangles[a])) {
-      double distance = compute_distance_with_a_triangle_and_ray(current_ray, all_faces.all_triangles[a]);
+  for (int a = 0; a < all_faces->total_number_of_triangles; a++) {
+    if (does_triangle_and_ray_intersect_correctly(current_ray, all_faces->all_triangles[a])) {
+      double distance = compute_distance_with_a_triangle_and_ray(current_ray, all_faces->all_triangles[a]);
       //printf(" distance %f  \n", distance);
       if (a == 0 || (distance < minimum_distance_of_ray_to_a_traingle)) {
         triangle_index = a;
@@ -755,13 +777,13 @@ spectrum_of_light compute_the_ray(ray current_ray, surface_array all_surfaces, t
   spectrum_of_light spectrum_of_current_ray;
   spectrum_of_current_ray.number_of_elements = (700 - 380) / 5 + 1;
 
-  int surface_index = all_faces.all_triangles[triangle_index].surface_number;
+  int surface_index = all_faces->all_triangles[triangle_index].surface_number;
 
   for (int o = 0; o < spectrum_of_current_ray.number_of_elements; o++) {
     double a1=current_ray.ray_spectrum.spectrum[o] ;
-    surface a2=all_surfaces.surface_array[surface_index];
+    surface a2=all_surfaces->surface_array[surface_index];
     double a3=a2.surface_spectrum.spectrum[o];
-    double a4=(1 - (all_surfaces.surface_array[surface_index]).diffusion_coefficient);
+    double a4=(1 - (all_surfaces->surface_array[surface_index]).diffusion_coefficient);
 
     spectrum_of_current_ray.spectrum[o] = a1* a3 * a4;
       
@@ -774,18 +796,18 @@ spectrum_of_light compute_the_ray(ray current_ray, surface_array all_surfaces, t
 
   for (int o = 0; o < spectrum_of_current_ray2.number_of_elements; o++) {
     double a1=current_ray.ray_spectrum.spectrum[o];
-    surface a2=all_surfaces.surface_array[surface_index];
+    surface a2=all_surfaces->surface_array[surface_index];
     double a3=a2.surface_spectrum.spectrum[o];
-    double a4=((all_surfaces.surface_array[surface_index]).diffusion_coefficient);
+    double a4=((all_surfaces->surface_array[surface_index]).diffusion_coefficient);
     spectrum_of_current_ray2.spectrum[o] =  a1* a3 * a4;
   }
   
 
 
   new_ray_diffusion.ray_spectrum = spectrum_of_current_ray2;
-  Vector3D new_location = find_intersection_of_a_triangle_with_a_ray( current_ray, all_faces.all_triangles[triangle_index]);
-  Vector3D new_specular_direction = give_specular_direction( current_ray, all_faces.all_triangles[triangle_index]);
-  Vector3D new_diffusive_direction = give_diffusive_direction( current_ray, all_faces.all_triangles[triangle_index], seed);
+  Vector3D new_location = find_intersection_of_a_triangle_with_a_ray( current_ray, all_faces->all_triangles[triangle_index]);
+  Vector3D new_specular_direction = give_specular_direction( current_ray, all_faces->all_triangles[triangle_index]);
+  Vector3D new_diffusive_direction = give_diffusive_direction( current_ray, all_faces->all_triangles[triangle_index], seed);
 
   new_ray_specular.ray_current_coordinates = new_location;
   new_ray_diffusion.ray_current_coordinates = new_location;
@@ -796,8 +818,8 @@ spectrum_of_light compute_the_ray(ray current_ray, surface_array all_surfaces, t
   new_ray_specular.recursion_index = current_ray.recursion_index + 1;
   new_ray_diffusion.recursion_index = current_ray.recursion_index + 1;
 
-  spectrum_of_light specular_spectrum = compute_the_ray(new_ray_specular, all_surfaces, all_faces, light_position, light_radius, seed, max_recursion, final_plane, qq);
-  spectrum_of_light diffusive_spectrum = compute_the_ray( new_ray_diffusion, all_surfaces, all_faces, light_position, light_radius, seed, max_recursion, final_plane, qq);
+  spectrum_of_light specular_spectrum = compute_the_ray(new_ray_specular, all_surfaces, all_faces, light_position, light_radius, seed, max_recursion);
+  spectrum_of_light diffusive_spectrum = compute_the_ray( new_ray_diffusion, all_surfaces, all_faces, light_position, light_radius, seed, max_recursion);
 
   add_second_spectrum_to_first_one(&specular_spectrum, diffusive_spectrum);
 
@@ -839,7 +861,7 @@ RGB trace(int which_pixel_x_coord, int which_pixel_y_coord, double camara_plane_
 
 
 
-    spectrum_of_light the_new_spectrum = compute_the_ray( current_ray, all_surfaces, all_faces, light_position, light_radius, &our_random_number, max_recursion, &final_plane, i);
+    spectrum_of_light the_new_spectrum = compute_the_ray( current_ray, &all_surfaces, &all_faces, light_position, light_radius, &our_random_number, max_recursion);
 
     
 
@@ -884,14 +906,14 @@ int main() {
   spectrum_of_light yellow_spectrum;
   yellow_spectrum.number_of_elements = (int)((700 - 380) / 5 + 1);
   for (int a = 380; a < 700 + 1; a += 5) {
-    if (a >= 400 && a <= 590) {
-      yellow_spectrum.spectrum[(int)((a - 380) / 5)] = 1.0;
+    if (a >= 560 && a <= 590) {
+      yellow_spectrum.spectrum[(int)((a - 380) / 5)] = 0.9;
 
     } else {
-      yellow_spectrum.spectrum[(int)((a - 380) / 5)] = 1.0;
+      yellow_spectrum.spectrum[(int)((a - 380) / 5)] = 0.1;
     }
   }
-  yellow_surface.diffusion_coefficient = 0.7;
+  yellow_surface.diffusion_coefficient = 0.6;
 
   surface_array all_surfaces;
   yellow_surface.surface_spectrum=yellow_spectrum; 
@@ -941,7 +963,7 @@ int main() {
   for (int i = 0; i < NUM_PIXELS_X; i++) {
     
     for (int j = 0; j < NUM_PIXELS_Y; j++) {
-      printf(" %f ", (double)(i * NUM_PIXELS_X ) / OUT_BUFFER_LEN);
+      
       
       RGB output_colour = trace(i, j, 1, 1, NUM_PIXELS_X, NUM_PIXELS_Y,(int)rand() % RAND_MAX, 0.0005,all_surfaces, all_tris, light_position, 2.0, 6);
       outc[4 * (i * NUM_PIXELS_X + j)] = output_colour.R;
