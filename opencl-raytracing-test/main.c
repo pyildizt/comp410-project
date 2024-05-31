@@ -566,16 +566,16 @@ Vector2D_array random_points_giver(double width, double length, double minimum_d
   return to_be_returned;
 
 }
-Vector3D_array place_it_to_new_location(Vector2D_array input, double new_x_coorinate, double new_y_coordiante);
-Vector3D_array place_it_to_new_location(Vector2D_array input, double new_x_coorinate, double new_y_coordiante) {
+Vector3D_array place_it_to_new_location(Vector2D_array* input, double new_x_coorinate, double new_y_coordiante);
+Vector3D_array place_it_to_new_location(Vector2D_array* input, double new_x_coorinate, double new_y_coordiante) {
   Vector3D_array to_be_returned;
   Vector3D our_array[50*50];
   to_be_returned.array=our_array;
-  to_be_returned.number_of_elements=input.number_of_elements;
-  for (int i=0;i<input.number_of_elements; i++) {
+  to_be_returned.number_of_elements=input->number_of_elements;
+  for (int i=0;i<input->number_of_elements; i++) {
     Vector3D point;
-    point.x = input.array[i].x+new_x_coorinate;
-    point.y = input.array[i].y+new_y_coordiante;
+    point.x = input->array[i].x+new_x_coorinate;
+    point.y = input->array[i].y+new_y_coordiante;
     point.z=(double)1;
     our_array[i]=point;
 
@@ -762,11 +762,11 @@ void spectral_to_rgb(double *spd, double *wavelengths, int length, int *R, int *
 
 
 // ray tracing computations are below
-spectrum_of_light compute_the_ray( ray current_ray,surface_array all_surfaces,triangle_array all_faces, Vector3D light_position, double light_radius,uint* seed, int max_recursion,Vector3D_array final_plane, int qq );
-spectrum_of_light compute_the_ray( ray current_ray,surface_array all_surfaces,triangle_array all_faces, Vector3D light_position, double light_radius,uint* seed, int max_recursion, Vector3D_array final_plane, int qq ) {
+spectrum_of_light compute_the_ray( ray current_ray,surface_array all_surfaces,triangle_array all_faces, Vector3D light_position, double light_radius,uint* seed, int max_recursion,Vector3D_array* final_plane, int qq );
+spectrum_of_light compute_the_ray( ray current_ray,surface_array all_surfaces,triangle_array all_faces, Vector3D light_position, double light_radius,uint* seed, int max_recursion, Vector3D_array* final_plane, int qq ) {
 
 if (qq==0) {
-  printf(" control-2 is: %f\n", final_plane.array[0].x);
+  printf(" control-2 is: %f\n", final_plane->array[0].x);
 
 }
 
@@ -874,7 +874,7 @@ RGB trace(int which_pixel_x_coord, int which_pixel_y_coord, double camara_plane_
     
     printf("The integer final final is: %d\n", to_be_returned.number_of_elements);
 
-    Vector3D_array final_plane=place_it_to_new_location(to_be_returned,which_pixel_x_coord*camara_plane_x_width/((double)(number_of_x_pixels))-(camara_plane_x_width/2), which_pixel_y_coord*camera_plane_y_width/((double)(number_of_y_pixels))-(camera_plane_y_width/2));
+    Vector3D_array final_plane=place_it_to_new_location(&to_be_returned,which_pixel_x_coord*camara_plane_x_width/((double)(number_of_x_pixels))-(camara_plane_x_width/2), which_pixel_y_coord*camera_plane_y_width/((double)(number_of_y_pixels))-(camera_plane_y_width/2));
 
 
     for (int i=0; i<final_plane.number_of_elements; i++) {
@@ -904,7 +904,7 @@ RGB trace(int which_pixel_x_coord, int which_pixel_y_coord, double camara_plane_
       if (i==0) { printf(" control-2 is: %f\n", final_plane.array[0].x); }
 
 
-      spectrum_of_light the_new_spectrum= compute_the_ray( current_ray, all_surfaces, all_faces,  light_position,  light_radius, &our_random_number, max_recursion, final_plane, i);
+      spectrum_of_light the_new_spectrum= compute_the_ray( current_ray, all_surfaces, all_faces,  light_position,  light_radius, &our_random_number, max_recursion, &final_plane, i);
 
       
 
