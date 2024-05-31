@@ -1,6 +1,9 @@
 #include "Angel.h"
 #include "data_types.hpp"
 #include "load_model.hpp"
+#include "imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_opengl3.h"
 #include <stdlib.h>
 #include <time.h>
 #include <math.h>
@@ -32,6 +35,7 @@ typedef vec4 point4;
 bool display_picking = false;
 
 /* CAMERA */
+bool left_click_holding = false;
 bool right_click_holding = false;
 bool right_click_released_once = false;
 
@@ -48,18 +52,19 @@ double pitch =  0.0;
 double last_yaw = yaw;
 double last_pitch = pitch;
 
-vec3 camera_coordinates(0.0, 0.0, -2.0);
+vec3 camera_coordinates(0.0, 0.0, -2.0f);
 vec3 camera_front(0.0f, 0.0f, -1.0f);
 vec3 camera_up(0.0f, 1.0f, 0.0f);
+vec3 camera_at(0.0, 0.0, -3.0f);
 
 float camera_speed = 0.05;
 GLfloat fovy = 60.0;
 
 /* OBJECT */
 bool object_arrow_selected = false;
-int object_arrow_selected_axis;
+int object_arrow_selected_axis; //x=1, y=2, z=3
 
-float object_speed = 0.01;
+float object_speed = 0.005;
 float inital_z_placement = -2.8;
 int selected_model_index = 0; // first object model is empty and selected
 int num_of_objects = 0;       // first object model is empty and selected
@@ -254,14 +259,12 @@ void create_object_matrices(struct object_model *obj)
                 break;
 
             case ScaleObject:
-                arrow_model_matrices[0] = rotation_matrix * Translate(translation) * Translate(distance_from_object, 0, 0) * RotateZ(-90.0f);
-                arrow_model_matrices[1] = rotation_matrix * Translate(translation) * Translate(0, distance_from_object, 0);
-                arrow_model_matrices[2] = rotation_matrix * Translate(translation) * Translate(0, 0, distance_from_object) * RotateX(90.0f);
+                arrow_model_matrices[1] = Translate(translation) * Translate(0, distance_from_object, 0);
                 break;
 
             case RotateObject:
-                arrow_model_matrices[0] = Translate(translation) * Translate(0, 0, distance_from_object) * RotateZ(-90.0f);
-                arrow_model_matrices[1] = Translate(translation) * Translate(distance_from_object, 0, 0);
+                arrow_model_matrices[0] = Translate(translation) * Translate(distance_from_object, 0, 0);
+                arrow_model_matrices[1] = Translate(translation) * Translate(0, 0, distance_from_object) * RotateZ(-90.0f);
                 arrow_model_matrices[2] = Translate(translation) * Translate(0, distance_from_object, 0) * RotateZ(-90.0f);
                 break;
             }
@@ -271,17 +274,12 @@ void create_object_matrices(struct object_model *obj)
 
 void draw_object_arrows(struct object_model *obj, bool with_picking)
 {
+    if (selected_action == NoAction)
+        return;
+
     glBindVertexArray(vao[ARROW_INDEX]);
     glBindBuffer(GL_ARRAY_BUFFER, buffers[ARROW_INDEX]);
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
-    // x-axis arrow
-    if (with_picking)
-        glBufferSubData(GL_ARRAY_BUFFER, sizeof(points_arrow), sizeof(picking_colors_arrow[0]), picking_colors_arrow[0]);
-    else
-        glBufferSubData(GL_ARRAY_BUFFER, sizeof(points_arrow), sizeof(colors_arrow[0]), colors_arrow[0]);
-    glUniformMatrix4fv(Model, 1, GL_TRUE, arrow_model_matrices[0]);
-    glDrawArrays(GL_TRIANGLES, 0, ARROW_VERTICES_NUM);
 
     // y-axis arrow
     if (with_picking)
@@ -289,6 +287,17 @@ void draw_object_arrows(struct object_model *obj, bool with_picking)
     else
         glBufferSubData(GL_ARRAY_BUFFER, sizeof(points_arrow), sizeof(colors_arrow[0]), colors_arrow[1]);
     glUniformMatrix4fv(Model, 1, GL_TRUE, arrow_model_matrices[1]);
+    glDrawArrays(GL_TRIANGLES, 0, ARROW_VERTICES_NUM);
+
+    if (selected_action == ScaleObject)
+        return;
+
+    // x-axis arrow
+    if (with_picking)
+        glBufferSubData(GL_ARRAY_BUFFER, sizeof(points_arrow), sizeof(picking_colors_arrow[0]), picking_colors_arrow[0]);
+    else
+        glBufferSubData(GL_ARRAY_BUFFER, sizeof(points_arrow), sizeof(colors_arrow[0]), colors_arrow[0]);
+    glUniformMatrix4fv(Model, 1, GL_TRUE, arrow_model_matrices[0]);
     glDrawArrays(GL_TRIANGLES, 0, ARROW_VERTICES_NUM);
 
     // z-axis arrow
@@ -461,13 +470,6 @@ struct object_model *add_object(ObjectType obj_type, std::string filename)
     std::cout << "Object #" << (num_of_objects-1) << " added: " << *(object_models[num_of_objects-1]) << std::endl;
 
     return obj;
-}
-
-void transform_object_with_arrows(int x_diff, int y_diff)
-{
-    // 0 = x-axis, 1 = y-axis, 2 = z-axis
-    TODO:
-    printf("axis selected: %d\n", object_arrow_selected_axis);
 }
 
 // free all memory at quit
@@ -670,7 +672,8 @@ void init()
 void draw_objects(bool with_picking)
 {
     // camera view matrix
-    view_matrix = LookAt(camera_coordinates, camera_coordinates + camera_front, camera_up);
+    camera_at = camera_coordinates + camera_front;
+    view_matrix = LookAt(camera_coordinates, camera_at, camera_up);
     glUniformMatrix4fv(View, 1, GL_TRUE, view_matrix);
 
     struct object_model *curr_object_model;
@@ -737,6 +740,105 @@ void draw_objects(bool with_picking)
     }
 }
 
+// This is used to find the direction of the arrows on the object depending on the viewers perspective
+// It will either return 1 or -1 to be multiplied with the x_mouse_difference
+int find_arrow_direction(bool x_axis)
+{
+    // No need to do it for the y-axis arrow (green one) as it will always be the up vector for the viewer
+
+    // For the x-axis arrow (red one) if camera_z_diff > 0 then x-axis arrow is in same general direction as x-axis
+    if (x_axis)
+    {
+        if (camera_coordinates.z - camera_at.z >= 0)
+            return 1;
+        else
+            return -1;
+    }
+    // For the z-axis arrow (blue one) if camera_x_diff > 0 then z-axis arrow is in same general direction as z-axis
+    else
+    {
+        if (camera_coordinates.x - camera_at.x >= 0)
+            return -1;
+        else
+            return 1;
+    }
+}
+
+void translate_object_using_arrows(double x_pos_diff, double y_pos_diff)
+{
+    int multiplier;
+    switch (object_arrow_selected_axis)
+    {
+    case 1: // x-axis
+        multiplier = find_arrow_direction(true);
+        object_models[selected_model_index]->Translation[Xaxis] += object_speed * multiplier * x_pos_diff;
+        break;
+    
+    case 2: // y-axis
+        multiplier = -1;
+        object_models[selected_model_index]->Translation[Yaxis] += object_speed * multiplier * y_pos_diff;
+        break;
+
+    case 3: // z-axis
+        multiplier = find_arrow_direction(false);
+        object_models[selected_model_index]->Translation[Zaxis] += object_speed * multiplier * x_pos_diff;
+        break;
+    }
+}
+
+void rotate_object_using_arrows(double x_pos_diff, double y_pos_diff)
+{
+    int multiplier;
+    switch (object_arrow_selected_axis)
+    {
+    case 1: // x-axis (red arrow)
+        multiplier = find_arrow_direction(true);
+        object_models[selected_model_index]->Theta[Xaxis] = multiplier * y_pos_diff;  
+        break;
+    
+    case 2: // y-axis (green arrow)
+        multiplier = -1 * find_arrow_direction(false);
+        object_models[selected_model_index]->Theta[Yaxis] = multiplier * x_pos_diff;  
+        break;
+
+    case 3: // z-axis (blue arrow)
+        multiplier = -1 * find_arrow_direction(true);
+        object_models[selected_model_index]->Theta[Zaxis] = multiplier * x_pos_diff;  
+        break;
+    }
+}
+
+void scale_object_using_arrows(double y_pos_diff)
+{
+    if (object_arrow_selected_axis != 2) //if not y-axis
+        return;
+
+    object_models[selected_model_index]->Scaling[Xaxis] += 0.01 * -y_pos_diff;
+    object_models[selected_model_index]->Scaling[Yaxis] += 0.01 * -y_pos_diff;
+    object_models[selected_model_index]->Scaling[Zaxis] += 0.01 * -y_pos_diff;
+}
+
+void transform_object_with_arrows(double x_diff, double y_diff)
+{
+    switch (selected_action)
+    {
+    case NoAction:
+        break;
+    
+    case TranslateObject:
+        translate_object_using_arrows(x_diff, y_diff);
+        break;
+
+    case ScaleObject:
+        scale_object_using_arrows(y_diff);
+        break;
+    
+    case RotateObject:
+        rotate_object_using_arrows(x_diff, y_diff);
+        break;
+    }
+}
+
 void display()
 {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -750,14 +852,17 @@ void update()
 {
     // only update the model matrix of the selected object
     create_object_matrices(object_models[selected_model_index]); 
+
+    object_models[selected_model_index]->Theta[Xaxis] = 0.0;
+    object_models[selected_model_index]->Theta[Yaxis] = 0.0;
+    object_models[selected_model_index]->Theta[Zaxis] = 0.0;
 }
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
     switch(key) 
     {
-    case GLFW_KEY_ESCAPE: //delete all objects and quit
-        delete_all_objects(); 
+    case GLFW_KEY_ESCAPE: // quit
         exit(EXIT_SUCCESS);
         break;
 
@@ -792,38 +897,12 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
         }
         break;
 
-    case GLFW_KEY_P:
+    case GLFW_KEY_P: //for debugging
         if (action == GLFW_PRESS)
             print_all_objects();
         break;
-    case GLFW_KEY_BACKSPACE: //delete selected object
-        if (action == GLFW_PRESS)
-            delete_selected_object();
-        break;
-
-    case GLFW_KEY_J: // TODO: press translate button
-        if (action == GLFW_PRESS)
-            selected_action = TranslateObject;
-        printf("selected_action: %d\n", selected_action);
-        break;
-    case GLFW_KEY_K: // TODO: press scale button
-        if (action == GLFW_PRESS)
-            selected_action = ScaleObject;
-        printf("selected_action: %d\n", selected_action);
-        break;
-    case GLFW_KEY_L: // TODO: press rotate button
-        if (action == GLFW_PRESS)
-            selected_action = RotateObject;
-        printf("selected_action: %d\n", selected_action);
-        break;
 
     // WASD and Mouse for camera movement (while right mouse button is being pressed)
-    // Arrow keys for selected object movement
-    // Left-Right: Translate in X, Up-Down: Translate in Y, Shift+Up-Down: Translate in Z
-    // 1, 2, 3: RotateX, RotateY, RotateZ (+Shift for reverse)
-    // 4, 5, 6: Scale in x, y, z (+Shift for reverse)
-
-    // Move camera:
     case GLFW_KEY_W:
         if ((action == GLFW_PRESS || action == GLFW_REPEAT) && right_click_holding) 
             camera_coordinates += camera_speed * camera_front;   
@@ -848,100 +927,15 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
         if ((action == GLFW_PRESS || action == GLFW_REPEAT) && right_click_holding) 
             camera_coordinates.y += camera_speed;
         break;
-
-    // Move object:
-    case GLFW_KEY_LEFT:
-        if (action == GLFW_PRESS || action == GLFW_REPEAT) 
-            object_models[selected_model_index]->Translation[Xaxis] += -object_speed; 
-        break;
-    case GLFW_KEY_RIGHT:
-        if (action == GLFW_PRESS || action == GLFW_REPEAT) 
-            object_models[selected_model_index]->Translation[Xaxis] += object_speed;   
-        break;
-    case GLFW_KEY_UP:
-        if (action == GLFW_PRESS || action == GLFW_REPEAT)
-        {
-            if (mods & GLFW_MOD_SHIFT)
-                object_models[selected_model_index]->Translation[Zaxis] += -object_speed;
-            else
-                object_models[selected_model_index]->Translation[Yaxis] += object_speed;
-        }
-        break;
-    case GLFW_KEY_DOWN:
-        if (action == GLFW_PRESS || action == GLFW_REPEAT)
-        {
-            if (mods & GLFW_MOD_SHIFT)
-                object_models[selected_model_index]->Translation[Zaxis] += object_speed;
-            else
-                object_models[selected_model_index]->Translation[Yaxis] += -object_speed;
-        }
-        break;
-
-    // Rotate object
-    case GLFW_KEY_1:
-        if (action == GLFW_PRESS || action == GLFW_REPEAT) 
-            if (mods & GLFW_MOD_SHIFT)
-                object_models[selected_model_index]->Theta[Xaxis] = -1.0;
-            else
-                object_models[selected_model_index]->Theta[Xaxis] = 1.0;   
-        if (action == GLFW_RELEASE)
-            object_models[selected_model_index]->Theta[Xaxis] = 0.0;
-        break;
-    case GLFW_KEY_2:  
-        if (action == GLFW_PRESS || action == GLFW_REPEAT) 
-            if (mods & GLFW_MOD_SHIFT)
-                object_models[selected_model_index]->Theta[Yaxis] = -1.0;   
-            else
-                object_models[selected_model_index]->Theta[Yaxis] = 1.0;  
-        if (action == GLFW_RELEASE)
-            object_models[selected_model_index]->Theta[Yaxis] = 0.0; 
-        break;
-    case GLFW_KEY_3:    
-        if (action == GLFW_PRESS || action == GLFW_REPEAT) 
-            if (mods & GLFW_MOD_SHIFT)
-                object_models[selected_model_index]->Theta[Zaxis] = -1.0;   
-            else
-                object_models[selected_model_index]->Theta[Zaxis] = 1.0;  
-        if (action == GLFW_RELEASE)
-            object_models[selected_model_index]->Theta[Zaxis] = 0.0; 
-        break;
-
-    // Scale object:
-    case GLFW_KEY_4:
-        if (action == GLFW_PRESS || action == GLFW_REPEAT) 
-        {
-            if (mods & GLFW_MOD_SHIFT)
-                object_models[selected_model_index]->Scaling[Xaxis] -= 0.01;
-            else
-                object_models[selected_model_index]->Scaling[Xaxis] += 0.01;
-        }  
-        break;
-    case GLFW_KEY_5:
-        if (action == GLFW_PRESS || action == GLFW_REPEAT) 
-        {
-            if (mods & GLFW_MOD_SHIFT)
-                object_models[selected_model_index]->Scaling[Yaxis] -= 0.01;
-            else
-                object_models[selected_model_index]->Scaling[Yaxis] += 0.01;
-        }  
-        break;
-    case GLFW_KEY_6:
-        if (action == GLFW_PRESS || action == GLFW_REPEAT) 
-        {
-            if (mods & GLFW_MOD_SHIFT)
-                object_models[selected_model_index]->Scaling[Zaxis] -= 0.01;
-            else
-                object_models[selected_model_index]->Scaling[Zaxis] += 0.01;
-        } 
-        break;
     }
-    
 }
 
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 {
     if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT)
     {
+        left_click_holding = true;
+
         // For picking
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         draw_objects(true);
@@ -965,9 +959,12 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
         vec4 color = vec4(pixel[0] / 255.0, pixel[1] / 255.0, pixel[2] / 255.0, 1.0);
         int index = UNIQUE_COLOR_TO_INT(color) - 4;
 
+        object_arrow_selected = false;
+
         // if an object is selected change selected_model_index
         if (0 <= index-1 && index-1 < num_of_objects)
         {
+            selected_action = NoAction;
             object_models[selected_model_index]->is_selected = false;
             selected_model_index = index-1;
             object_models[selected_model_index]->is_selected = true;
@@ -976,11 +973,15 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
         else if (0 <= index+4 && index+4 <= 3) 
         {
             object_arrow_selected = true;
-            object_arrow_selected_axis = index+4;
+            object_arrow_selected_axis = index+4; //x=1, y=2, z=3
         }
         
         if (display_picking)
             glfwSwapBuffers(window);
+    }
+    else if (action == GLFW_RELEASE && button == GLFW_MOUSE_BUTTON_LEFT)
+    {
+        left_click_holding = false;
     }
     if ((action == GLFW_PRESS || action == GLFW_REPEAT) && button == GLFW_MOUSE_BUTTON_RIGHT)
     {
@@ -1045,11 +1046,10 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
         camera_front = normalize(front);       
     }
 
-    if (object_arrow_selected)
+    if (object_arrow_selected && left_click_holding)
     {
         transform_object_with_arrows(x_pos_diff, y_pos_diff);
     }
-        
 }
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
@@ -1097,22 +1097,99 @@ int main(int argc, char *argv[])
     glfwSetKeyCallback(window, key_callback);
     glfwSetCursorPosCallback(window, mouse_callback);
     glfwSetMouseButtonCallback(window, mouse_button_callback);
-    glfwSetWindowSizeCallback(window, framebuffer_size_callback);
+    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO &io = ImGui::GetIO();
+    (void)io;
+    // Setup Dear ImGui style
+    ImGui::StyleColorsLight();
+
+    // Setup Platform/Renderer backends
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
     
     init();
+
+    ImGui_ImplOpenGL3_Init();
 
     double frameRate = 60.0, currentTime, previousTime = 0.0;
     while (!glfwWindowShouldClose(window))
     {
-        currentTime = glfwGetTime();
-        if (currentTime - previousTime > 1.0/frameRate)
-        {
-            previousTime = currentTime;
-            // update();
-        }
         update();
-
         display();
+
+        ///////
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        int width, height;
+
+        glfwGetWindowSize(window, &width, &height);
+        ImGui::SetNextWindowPos(ImVec2(0, 0));
+        ImGui::SetNextWindowSize(ImVec2(300, height));
+        ImGui::Begin("Button Window", nullptr,
+                    ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                        ImGuiWindowFlags_NoMove |
+                        ImGuiWindowFlags_NoSavedSettings);
+
+        ImGui::BeginChild("Load Model Box", ImVec2(-1, 100), true,
+                        ImGuiWindowFlags_HorizontalScrollbar);
+        ImGui::TextWrapped("Model filename:");
+        static char filename[256] = "";
+        ImGui::InputText("File path", filename, sizeof(filename));
+        
+        if (ImGui::Button("Load Model"))
+        {
+            //TODO:
+            printf("load model button pressed\n");
+        }
+        ImGui::EndChild();
+
+        ImGui::BeginChild("???? Box", ImVec2(-1, 100), true,
+                        ImGuiWindowFlags_HorizontalScrollbar);
+
+        if (ImGui::Button("??? Shader sth"))
+        {
+            //TODO:
+            printf("shader editor open button pressed\n");
+        }
+        if (ImGui::Button("Duplicate Object"))
+        {
+            //TODO:
+            printf("duplicate object button pressed\n");
+        }
+        if (ImGui::Button("Delete Object"))
+        {
+            delete_selected_object();
+        }
+        ImGui::EndChild();
+
+        ImGui::BeginChild("Transform Object Box", ImVec2(-1, 100), true,
+                        ImGuiWindowFlags_HorizontalScrollbar);
+
+        if (ImGui::Button("Move Object"))
+        {
+            selected_action = TranslateObject;
+        }
+        if (ImGui::Button("Scale Object"))
+        {
+            selected_action = ScaleObject;
+        }
+        if (ImGui::Button("Rotate Object"))
+        {
+            selected_action = RotateObject;
+        }
+        ImGui::EndChild();
+
+        ImGui::End();
+
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+        //////
+
         if (!display_picking)
             glfwSwapBuffers(window);
         glfwPollEvents();
