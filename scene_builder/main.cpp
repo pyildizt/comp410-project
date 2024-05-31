@@ -78,40 +78,10 @@ GLuint vColor;
 
 mat4 arrow_model_matrices[3];
 
-enum {Xaxis = 0, Yaxis = 1, Zaxis = 2, NumAxes = 3};
-enum ObjectType {Cube, Sphere, Imported, PointLight, Empty};
+
 enum SelectedAction {NoAction, TranslateObject, ScaleObject, RotateObject};
 SelectedAction selected_action = NoAction;
-struct object_model
-{
-    enum ObjectType object_type;
-    struct model *model;
 
-    vec3 object_coordinates;
-    mat4 model_matrix;
-    mat4 rotation_matrix;
-    GLfloat Theta[NumAxes];
-    GLfloat Scaling[NumAxes];
-    GLfloat Translation[NumAxes];
-
-    GLuint vao;
-    GLuint buffer;
-    int vertices_num;
-
-    point4 *points_array;
-    color4 *colors_array;
-    color4 *picking_colors_array;
-    color4 unique_id_color;
-
-    bool is_selected;
-
-    friend std::ostream& operator<<(std::ostream& os, const object_model& obj) {
-        os << "is_selected: " << obj.is_selected << ", object_type: " << obj.object_type << ", coords: (" << obj.object_coordinates.x << ", " << obj.object_coordinates.y << 
-            ", " << obj.object_coordinates.z << "), v_num: " << obj.vertices_num << ", id_color: (" << obj.unique_id_color.x <<
-            ", " << obj.unique_id_color.y << ", " << obj.unique_id_color.z << ")";
-        return os;
-    }
-};
 
 struct object_model *empty_object;
 struct object_model **object_models;
@@ -696,6 +666,7 @@ void init()
 
     // create first empty object, this will be selected when background is clicked 
     empty_object = add_object(Empty, "");
+    add_object(Cube, "");
 }
 
 void draw_objects(bool with_picking)
@@ -1092,7 +1063,7 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
     else
         fovy_changed = fovy;
 
-    projection_matrix = Perspective(fovy_changed, aspect_ratio, 1.8, 5.5);
+    projection_matrix = Perspective(fovy_changed, aspect_ratio, .1, 15.5);
     glUniformMatrix4fv(Projection, 1, GL_TRUE, projection_matrix);
 }
 
@@ -1109,7 +1080,14 @@ int main(int argc, char *argv[])
     
     GLFWwindow* window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Scene Builder", NULL, NULL);
     glfwMakeContextCurrent(window);
-    
+
+#if defined(__linux__) || defined(_WIN32)
+    glewExperimental = GL_TRUE;
+    glewInit();
+#elif defined(__APPLE__)
+    // Code for macOS
+#endif
+
     if (!window)
     {
         glfwTerminate();
