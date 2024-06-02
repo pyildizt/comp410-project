@@ -5,19 +5,22 @@ Today's goal is to visualize a simple triangle with no lighting
 */
 
 // C standard includes
-#include <stdio.h>
-
-// OpenCL includes
-#ifdef __linux__
-#endif
+#include "mat.h"
+#include <data_types.hpp>
+#include <fstream>
+#include <iostream>
+#include <load_model.hpp>
 #include <math.h>
 #include <png.h>
+#include <pthread.h>
+#include <sstream>
 #include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define NUM_PIXELS_X 100
-#define NUM_PIXELS_Y 100
+#define NUM_PIXELS_X 256
+#define NUM_PIXELS_Y 256
 #define OUT_BUFFER_LEN (NUM_PIXELS_X * NUM_PIXELS_Y)
 
 typedef unsigned char uchar;
@@ -138,6 +141,7 @@ typedef struct {
 
 } surface_array;
 
+namespace ray_tracer {
 typedef struct {
   Vector3D coordinates1;
   Vector3D coordinates2;
@@ -145,9 +149,12 @@ typedef struct {
   int surface_number;
 
 } triangle;
+} // namespace ray_tracer
 
+#define MAX_NUM_TRIS 32000
 typedef struct {
-  triangle all_triangles[2000]; // we have at maximum 2000 distinct triangles
+  ray_tracer::triangle
+      all_triangles[MAX_NUM_TRIS]; // we have at maximum 2000 distinct triangles
   int total_number_of_triangles;
 
 } triangle_array;
@@ -174,9 +181,9 @@ void add_second_spectrum_to_first_one(spectrum_of_light *s1,
   }
 }
 
-Vector3D give_the_normal_of_a_triangle(triangle input);
+Vector3D give_the_normal_of_a_triangle(ray_tracer::triangle input);
 Vector3D give_the_normal_of_a_triangle(
-    triangle
+    ray_tracer::triangle
         input) { // Source:
                  // https://stackoverflow.com/questions/19350792/calculate-normal-of-a-single-triangle-in-3d-space
 
@@ -224,10 +231,10 @@ double dot_product(Vector3D a, Vector3D b);
 double dot_product(Vector3D a, Vector3D b) {
   return a.x * b.x + a.y * b.y + a.z * b.z;
 }
-bool does_triangle_and_ray_intersect_correctly(ray R, triangle tri);
+bool does_triangle_and_ray_intersect_correctly(ray R, ray_tracer::triangle tri);
 bool does_triangle_and_ray_intersect_correctly(
     ray R,
-    triangle
+    ray_tracer::triangle
         tri) { // source is //
                // https://stackoverflow.com/questions/42740765/intersection-between-line-and-triangle-in-3d
   double t;
@@ -280,8 +287,10 @@ double magnitude(Vector3D v) {
   return sqrt((float)(v.x * v.x + v.y * v.y + v.z * v.z));
 }
 
-double compute_distance_with_a_triangle_and_ray(ray R, triangle tri);
-double compute_distance_with_a_triangle_and_ray(ray R, triangle tri) {
+double compute_distance_with_a_triangle_and_ray(ray R,
+                                                ray_tracer::triangle tri);
+double compute_distance_with_a_triangle_and_ray(ray R,
+                                                ray_tracer::triangle tri) {
   Vector3D normal = give_the_normal_of_a_triangle(tri);
   double D = -(normal.x * tri.coordinates1.x + normal.y * tri.coordinates1.y +
                normal.z * tri.coordinates1.z);
@@ -331,9 +340,10 @@ double compute_distance_with_a_ray_and_a_point(ray current_ray,
   return minimumDistance(current_ray.ray_current_coordinates,
                          current_ray.ray_direction, light_position);
 }
-Vector3D find_intersection_of_a_triangle_with_a_ray(ray R, triangle tri);
+Vector3D find_intersection_of_a_triangle_with_a_ray(ray R,
+                                                    ray_tracer::triangle tri);
 Vector3D find_intersection_of_a_triangle_with_a_ray(
-    ray R, triangle tri) { // written with the help of ChatGPT
+    ray R, ray_tracer::triangle tri) { // written with the help of ChatGPT
   double x0 = R.ray_current_coordinates.x, y0 = R.ray_current_coordinates.y,
          z0 = R.ray_current_coordinates.z;
   double dx = R.ray_direction.x, dy = R.ray_direction.y, dz = R.ray_direction.z;
@@ -355,8 +365,8 @@ Vector3D find_intersection_of_a_triangle_with_a_ray(
 
   return intersection;
 }
-Vector3D give_specular_direction(ray current_ray, triangle tri);
-Vector3D give_specular_direction(ray current_ray, triangle tri) {
+Vector3D give_specular_direction(ray current_ray, ray_tracer::triangle tri);
+Vector3D give_specular_direction(ray current_ray, ray_tracer::triangle tri) {
   Vector3D planeNormal = give_the_normal_of_a_triangle(tri);
   Vector3D incidentRay = current_ray.ray_direction;
 
@@ -406,8 +416,10 @@ Vector3D random_direction(Vector3D normal1, uint *seed) {
   return result;
 }
 
-Vector3D give_diffusive_direction(ray current_ray, triangle tri, uint *seed);
-Vector3D give_diffusive_direction(ray current_ray, triangle tri, uint *seed) {
+Vector3D give_diffusive_direction(ray current_ray, ray_tracer::triangle tri,
+                                  uint *seed);
+Vector3D give_diffusive_direction(ray current_ray, ray_tracer::triangle tri,
+                                  uint *seed) {
   Vector3D planeNormal = give_the_normal_of_a_triangle(tri);
 
   return random_direction(planeNormal, seed);
@@ -467,11 +479,11 @@ int fitness_checker(Vector2D current_point, Vector2D *location_array, int rows,
 
     int y0 = my_floor(current_point.y / tek_kare_uzunluk);
 
-    int i0 = fmax(y0 - 1, 0);
-    int i1 = fmin(y0 + 1, m - 1);
+    int i0 = fmax(y0 - 1, 0.0);
+    int i1 = fmin(y0 + 1, (float)(m - 1));
 
-    int j0 = fmax(x0 - 1, 0);
-    int j1 = fmin(x0 + 1, n - 1);
+    int j0 = fmax(x0 - 1, 0.0);
+    int j1 = fmin(x0 + 1, (float)(n - 1));
 
     for (int i = i0; i <= i1; i++) {
       for (int j = j0; j <= j1; j++) {
@@ -508,7 +520,6 @@ Vector2D_array random_points_giver(double width, double length,
   int n = my_ceil(length / tek_kare_uzunluk);
   int m = my_ceil(width / tek_kare_uzunluk);
 
-  // int background_array[m][n];
   int background_array[50][50];
 
   for (int i = 0; i < m; i++) {
@@ -739,7 +750,7 @@ double gamma_correct(double value) {
   if (value <= 0.0031308) {
     return 12.92 * value;
   } else {
-    return 1.055 * pow((float)value, 1 / 2.4) - 0.055;
+    return 1.055 * pow((float)value, (float)(1 / 2.4)) - 0.055;
   }
 }
 void spectral_to_rgb(double *spd, double *wavelengths, int length, int *R,
@@ -762,9 +773,9 @@ void spectral_to_rgb(double *spd, double *wavelengths, int length, int *R,
 
   // Clamp and scale to [0, 255]
 
-  *R = (int)(fmax((float)0.0, fmin((float)1.0, rgb_corrected[0])) * 255);
-  *G = (int)(fmax((float)0.0, fmin((float)1.0, rgb_corrected[1])) * 255);
-  *B = (int)(fmax((float)0.0, fmin((float)1.0, rgb_corrected[2])) * 255);
+  *R = (int)(fmax((float)0.0, fmin((float)1.0, (float)rgb_corrected[0])) * 255);
+  *G = (int)(fmax((float)0.0, fmin((float)1.0, (float)rgb_corrected[1])) * 255);
+  *B = (int)(fmax((float)0.0, fmin((float)1.0, (float)rgb_corrected[2])) * 255);
 }
 
 // ray tracing computations are below
@@ -882,7 +893,7 @@ RGB trace(int which_pixel_x_coord, int which_pixel_y_coord,
           double camara_plane_x_width, double camera_plane_y_width,
           int number_of_x_pixels, int number_of_y_pixels,
           int random_number_generator_seed, double minimum_distance,
-          surface_array all_surfaces, triangle_array all_faces,
+          surface_array *all_surfaces, triangle_array *all_faces,
           Vector3D light_position, double light_radius, int max_recursion) {
   uint our_random_number = (uint)random_number_generator_seed;
 
@@ -926,7 +937,7 @@ RGB trace(int which_pixel_x_coord, int which_pixel_y_coord,
     current_ray.ray_current_coordinates = copy_given3d(final_plane.array[i]);
 
     spectrum_of_light the_new_spectrum =
-        compute_the_ray(current_ray, &all_surfaces, &all_faces, light_position,
+        compute_the_ray(current_ray, all_surfaces, all_faces, light_position,
                         light_radius, &our_random_number, max_recursion);
 
     add_second_spectrum_to_first_one(&resultant_spectrum, the_new_spectrum);
@@ -962,64 +973,147 @@ RGB trace(int which_pixel_x_coord, int which_pixel_y_coord,
 
   return colour;
 }
-int main() {
-  surface yellow_surface;
-  spectrum_of_light yellow_spectrum;
-  yellow_spectrum.number_of_elements = (int)((700 - 380) / 5 + 1);
-  for (int a = 380; a < 700 + 1; a += 5) {
-    if (a >= 560 && a <= 590) {
-      yellow_spectrum.spectrum[(int)((a - 380) / 5)] = 0.9;
+///-------------------------------------------------------------
+// CHATGPT GENERATED CODE
+void RGBtoXYZ(int R, int G, int B, double *X, double *Y, double *Z) {
+  double r = R / 255.0; // Normalize the RGB values to [0, 1]
+  double g = G / 255.0;
+  double b = B / 255.0;
 
-    } else {
-      yellow_spectrum.spectrum[(int)((a - 380) / 5)] = 0.1;
-    }
+  // Convert to linear RGB
+  r = (r > 0.04045) ? pow((r + 0.055) / 1.055, 2.4) : r / 12.92;
+  g = (g > 0.04045) ? pow((g + 0.055) / 1.055, 2.4) : g / 12.92;
+  b = (b > 0.04045) ? pow((b + 0.055) / 1.055, 2.4) : b / 12.92;
+
+  // Assume sRGB
+  *X = r * 0.4124564 + g * 0.3575761 + b * 0.1804375;
+  *Y = r * 0.2126729 + g * 0.7151522 + b * 0.0721750;
+  *Z = r * 0.0193339 + g * 0.1191920 + b * 0.9503041;
+}
+void XYZToSpectrum(double X, double Y, double Z, spectrum_of_light *spec) {
+  // Constants for the Gaussian centers for R, G, B (just an example)
+  const double lambdaR = 560; // Peak for Red
+  const double lambdaG = 530; // Peak for Green
+  const double lambdaB = 460; // Peak for Blue
+
+  const double sigma = 20; // Width of the Gaussian
+
+  for (int i = 0; i < spec->number_of_elements; i++) {
+    double lambda = 380 + i * 5;
+    // Compute the Gaussian contributions for each component
+    double r = exp(-0.5 * pow((lambda - lambdaR) / sigma, 2));
+    double g = exp(-0.5 * pow((lambda - lambdaG) / sigma, 2));
+    double b = exp(-0.5 * pow((lambda - lambdaB) / sigma, 2));
+
+    // Combine the Gaussians weighted by the XYZ components (simplified model)
+    spec->spectrum[i] = r * X + g * Y + b * Z;
   }
-  yellow_surface.diffusion_coefficient = 0.6;
+}
 
-  surface_array all_surfaces;
-  yellow_surface.surface_spectrum = yellow_spectrum;
-  all_surfaces.surface_array[0] = yellow_surface;
+///--------------------------------------------------------------
 
-  triangle yellow_triangle;
-  yellow_triangle.surface_number = 0;
-  Vector3D v1;
-  v1.x = -1.0;
-  v1.y = 0.0;
-  v1.z = 3.0;
-  Vector3D v2;
-  v2.x = 0.0;
-  v2.y = 1.0;
-  v2.z = 3.0;
-  Vector3D v3;
-  v3.x = 1.0;
-  v3.y = 0.0;
-  v3.z = 3.0;
+void load_json_model(const std::string filepath, model **modelp,
+                     surface *all_surfaces, int *current_surface_index,
+                     triangle_array *all_triangles, int *current_triangle_index,
+                     mat4 Transform, mat4 Projection) {
+  std::ifstream file2(filepath);
+  std::stringstream buffer;
+  buffer << file2.rdbuf();
+  std::string json2 = buffer.str();
+  file2.close();
 
-  yellow_triangle.coordinates1 = v1;
-  yellow_triangle.coordinates2 = v2;
-  yellow_triangle.coordinates3 = v3;
+  serializable_model smodel;
+  smodel.zax_from_json(json2.c_str());
 
-  triangle_array all_tris;
-  all_tris.total_number_of_triangles = 1;
-  all_tris.all_triangles[0] = yellow_triangle;
+  std::cout << "Loaded Model " << smodel << std::endl;
 
+  model *new_model = (model *)calloc(1, sizeof(model));
+  model _model = to_model(smodel);
+  new_model->material.diffuse = _model.material.diffuse;
+  new_model->material.shininess = _model.material.shininess;
+
+  for (auto t : _model.triangles) {
+    new_model->triangles.push_back(t);
+  }
+
+  all_surfaces[*current_surface_index].diffusion_coefficient =
+      1.0 / (1.0 + (new_model->material.shininess / 50.0));
+  printf("coeff: %.2f \n",all_surfaces[*current_surface_index].diffusion_coefficient);
+  all_surfaces[*current_surface_index].surface_spectrum.number_of_elements = 65;
+
+  double xyz_linear[3];
+  RGBtoXYZ(new_model->material.diffuse.x * 255,
+           new_model->material.diffuse.y * 255,
+           new_model->material.diffuse.z * 255, &xyz_linear[0], &xyz_linear[1],
+           &xyz_linear[2]);
+  std::cout << "xyz: " << xyz_linear[0] << " " << xyz_linear[1] << " "
+            << xyz_linear[2] << std::endl;
+  XYZToSpectrum(xyz_linear[0], xyz_linear[1], xyz_linear[2],
+                &(all_surfaces[*current_surface_index].surface_spectrum));
+
+  for (auto t : new_model->triangles) {
+    t.p0 = Projection * Transform * t.p0;
+    t.p1 = Projection * Transform * t.p1;
+    t.p2 = Projection * Transform * t.p2;
+
+    all_triangles->all_triangles[*current_triangle_index].coordinates1.x =
+        t.p0.x;
+    all_triangles->all_triangles[*current_triangle_index].coordinates1.y =
+        t.p0.y;
+    all_triangles->all_triangles[*current_triangle_index].coordinates1.z =
+        t.p0.z;
+
+    all_triangles->all_triangles[*current_triangle_index].coordinates2.x =
+        t.p1.x;
+    all_triangles->all_triangles[*current_triangle_index].coordinates2.y =
+        t.p1.y;
+    all_triangles->all_triangles[*current_triangle_index].coordinates2.z =
+        t.p1.z;
+
+    all_triangles->all_triangles[*current_triangle_index].coordinates3.x =
+        t.p2.x;
+    all_triangles->all_triangles[*current_triangle_index].coordinates3.y =
+        t.p2.y;
+    all_triangles->all_triangles[*current_triangle_index].coordinates3.z =
+        t.p2.z;
+
+    all_triangles->all_triangles[*current_triangle_index].surface_number =
+        *current_surface_index;
+    *current_triangle_index += 1;
+    all_triangles->total_number_of_triangles += 1;
+  }
+  *current_surface_index += 1;
+}
+
+struct thread_data {
+  surface_array *all_surfaces;
+  triangle_array *all_tris;
   Vector3D light_position;
-  light_position.x = 0.0;
-  light_position.y = 0.0;
-  light_position.z = 0.0;
+  uchar *outc;
+  int thread_index;
+  int thread_count;
+};
+void parallel_trace(surface_array *all_surfaces, triangle_array *all_tris,
+                    Vector3D light_position, uchar *outc, int thread_index,
+                    int thread_count);
 
-  uchar *outc = (uchar *)calloc(OUT_BUFFER_LEN * 4, sizeof(uchar));
+void *to_call_pthreads(void *_data) {
+  auto data = (thread_data *)_data;
+  parallel_trace(data->all_surfaces, data->all_tris, data->light_position,
+                 data->outc, data->thread_index, data->thread_count);
+  pthread_exit(NULL);
+}
 
-  ray exp;
-  Vector3D e = {0.0, 0.01, 1.0};
-  exp.ray_current_coordinates = e;
-  exp.ray_direction = e;
-
-  bool a = does_triangle_and_ray_intersect_correctly(exp, yellow_triangle);
-
+void parallel_trace(surface_array *all_surfaces, triangle_array *all_tris,
+                    Vector3D light_position, uchar *outc, int thread_index,
+                    int thread_count) {
   for (int i = 0; i < NUM_PIXELS_X; i++) {
 
     for (int j = 0; j < NUM_PIXELS_Y; j++) {
+
+      int ij = (j * NUM_PIXELS_X) + i;
+      if (ij % thread_count != thread_index)
+        continue;
 
       RGB output_colour =
           trace(i, j, 1, 1, NUM_PIXELS_X, NUM_PIXELS_Y, (int)rand() % RAND_MAX,
@@ -1030,6 +1124,67 @@ int main() {
       outc[4 * (i * NUM_PIXELS_X + j) + 3] = 255;
     }
   }
+}
+
+int main() {
+  surface_array all_surfaces;
+  triangle_array all_tris;
+  all_tris.total_number_of_triangles = 0;
+  int surface_index = 0;
+  int tri_index = 0;
+  model *to_free;
+  load_json_model("../test/bunny.json", &to_free, (all_surfaces.surface_array),
+                  &surface_index, &all_tris, &tri_index,
+                  Translate(0.0, 0.0, 2.0) * RotateY(120) * RotateX(180), identity());
+  Vector3D light_position;
+  light_position.x = 0.0;
+  light_position.y = 0.0;
+  light_position.z = 0.0;
+
+  uchar *outc = (uchar *)calloc(OUT_BUFFER_LEN * 4, sizeof(uchar));
+
+  std::cout << "num tris: " << tri_index
+            << " triangle 0: " << all_tris.all_triangles[0].coordinates1.x
+            << " " << all_tris.all_triangles[0].coordinates1.y << " "
+            << all_tris.all_triangles[0].coordinates1.z << " "
+            << all_tris.all_triangles[0].coordinates2.x << " "
+            << all_tris.all_triangles[0].coordinates2.y << " "
+            << all_tris.all_triangles[0].coordinates2.z << " "
+            << all_tris.all_triangles[0].coordinates3.x << " "
+            << all_tris.all_triangles[0].coordinates3.y << " "
+            << all_tris.all_triangles[0].coordinates3.z << " " << std::endl;
+
+  ray exp;
+  Vector3D e = {0.0, 0.01, 1.0};
+  exp.ray_current_coordinates = e;
+  exp.ray_direction = e;
+
+  // bool a = does_triangle_and_ray_intersect_correctly(exp, yellow_triangle);
+  printf("create thread \n");
+  int num_threads = 12;
+  pthread_t threads[num_threads];
+  thread_data data[num_threads];
+
+  for (int t = 0; t < num_threads; t++) {
+    data[t].all_surfaces = &all_surfaces;
+    data[t].all_tris = &all_tris;
+    data[t].light_position = light_position;
+    data[t].outc = outc;
+    data[t].thread_count = num_threads;
+    data[t].thread_index = t;
+    int rc = pthread_create(&threads[t], NULL, to_call_pthreads, &data[t]);
+    if (rc) {
+      printf("ERROR; return code from pthread_create() is %d\n", rc);
+      exit(-1);
+    }
+  }
+
+  printf("started all threads. \n");
+
+  for (int t = 0; t < num_threads; t++) {
+    pthread_join(threads[t], NULL);
+  }
+  printf("joined threads \n");
   save_png("./test.png", outc, NUM_PIXELS_X, NUM_PIXELS_Y);
 
   return 0;
