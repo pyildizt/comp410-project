@@ -1,6 +1,7 @@
 #ifndef DATA_TYPES
 #define DATA_TYPES
 #include "Angel.h"
+#include "shaded_object.hpp"
 #include <climits>
 #include <cstdio>
 #include <cstring>
@@ -232,7 +233,7 @@ enum {Xaxis = 0, Yaxis = 1, Zaxis = 2, NumAxes = 3};
 struct object_model
 {
     enum ObjectType object_type;
-    struct model *model;
+    sobj::shaded_object *shaded_obj;
 
     vec3 object_coordinates;
     mat4 model_matrix;
@@ -241,23 +242,26 @@ struct object_model
     GLfloat Scaling[NumAxes];
     GLfloat Translation[NumAxes];
 
-    GLuint vao;
-    GLuint buffer;
-    int vertices_num;
+    // GLuint vao;
+    // GLuint buffer;
+    // int vertices_num;
 
-    vec4 *points_array;
-    vec4 *colors_array;
-    vec4 *picking_colors_array;
-    vec4 unique_id_color;
-    vec4 *normals;
-    vec4 *uv_coords;
+    // vec4 *points_array;
+    // vec4 *colors_array;
+    // vec4 *picking_colors_array;
+    // vec4 unique_id_color;
+    // vec4 *normals;
+    // vec4 *uv_coords;
 
     bool is_selected;
 
     friend std::ostream& operator<<(std::ostream& os, const object_model& obj) {
-        os << "is_selected: " << obj.is_selected << ", object_type: " << obj.object_type << ", coords: (" << obj.object_coordinates.x << ", " << obj.object_coordinates.y << 
-            ", " << obj.object_coordinates.z << "), v_num: " << obj.vertices_num << ", id_color: (" << obj.unique_id_color.x <<
-            ", " << obj.unique_id_color.y << ", " << obj.unique_id_color.z << ")";
+        os << "is_selected: " << obj.is_selected << ", object_type: " << obj.object_type << 
+            ", coords: (" << obj.object_coordinates.x << ", " << obj.object_coordinates.y << 
+            ", " << obj.object_coordinates.z 
+            // << "), v_num: " << obj.vertices_num << ", id_color: (" << obj.unique_id_color.x <<
+            //", " << obj.unique_id_color.y << ", " << obj.unique_id_color.z 
+            << ")";
         return os;
     }
 };

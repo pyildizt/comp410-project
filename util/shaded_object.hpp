@@ -4,7 +4,10 @@
 #include "data_types.hpp"
 #include "load_model.hpp"
 #include "model_projections.hpp"
-#include <GL/gl.h>
+#if defined(__linux__) || defined(_WIN32)
+    #include <GL/gl.h>
+#elif defined(__APPLE__)
+#endif
 #include <cassert>
 #include <fstream>
 #include <iostream>
@@ -17,7 +20,7 @@
     auto err = glGetError();                                                   \
     if (err != 0) {                                                            \
       std::cout << "GL ERROR: " << __LINE__ << " " << err << " "               \
-                << glewGetErrorString(err) << std::endl;                       \
+                /* FIXME: << glewGetErrorString(err) */<< std::endl;                       \
       exit(1);                                                                 \
     }                                                                          \
   }
