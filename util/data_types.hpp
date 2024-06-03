@@ -1,7 +1,6 @@
 #ifndef DATA_TYPES
 #define DATA_TYPES
 #include "Angel.h"
-#include "shaded_object.hpp"
 #include <climits>
 #include <cstdio>
 #include <cstring>
@@ -233,8 +232,7 @@ enum {Xaxis = 0, Yaxis = 1, Zaxis = 2, NumAxes = 3};
 struct object_model
 {
     enum ObjectType object_type;
-    sobj::shaded_object *shaded_obj;
-
+    int shaded_object_index;
     vec3 object_coordinates;
     mat4 model_matrix;
     mat4 rotation_matrix;

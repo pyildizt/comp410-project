@@ -28,9 +28,9 @@
 
 #define CUBE_PATH "../test/cube.json"
 #define SPHERE_PATH "../test/tetrahedron.json"
-#define POINTLIGHT_PATH "../test/tetrahedron.json"
+#define POINTLIGHT_PATH "../test/tetrahedron.json" //FIXME: smaller yellow sphere
 #define ARROW_PATH_1 "../test/arrow.json"
-#define ARROW_PATH_2 "../test/arrow.json"
+#define ARROW_PATH_2 "../test/arrow.json" //FIXME: different colored arrows
 #define ARROW_PATH_3 "../test/arrow.json"
 
 typedef vec4 color4;
@@ -72,9 +72,9 @@ float object_speed = 0.005;
 float inital_z_placement = -2.8;
 int selected_model_index = 0; // first object model is empty and selected
 int num_of_objects = 0;       // first object model is empty and selected
+int num_of_models = 4;
 
 GLuint program, picker_program;
-GLuint Model, View, Projection; //FIXME: get rid???
 mat4 view_matrix, projection_matrix;
 mat4 arrow_model_matrices[3];
 vec4 light_position(1.0, 1.0, 1.0, 1.0);
@@ -86,8 +86,11 @@ sobj::shaded_object *cube_shaded_object;
 sobj::shaded_object *sphere_shaded_object;
 sobj::shaded_object *pointLight_shaded_object;
 sobj::shaded_object *arrow_shaded_objects[3];
+sobj::shaded_object **shaded_objects;
+int shaded_objects_size = 10;
 
 struct object_model *empty_object;
+struct object_model *pointLight_object;
 struct object_model **object_models;
 int object_models_size = 10;
 
@@ -185,6 +188,17 @@ void draw_object_arrows(struct object_model *obj, bool with_picking)
 // Add object button function, if obj_type == Imported then filename string "exmaple.json" with path must be provided
 struct object_model *add_object(ObjectType obj_type, const char *filename)
 {
+    // If filename is incorrect then give error and return
+    if (obj_type == Imported)
+    {
+        std::ifstream file2(filename);
+        if (!file2) 
+        {
+            std::cerr << "Error: Unable to open file " << filename << std::endl;
+            return nullptr;
+        }
+    }
+
     num_of_objects++;
 
     // reallocate memory to objects_model if necessary
@@ -222,32 +236,50 @@ struct object_model *add_object(ObjectType obj_type, const char *filename)
     switch (obj_type)
     {
     case Cube:
-        obj->shaded_obj = cube_shaded_object;
+        obj->shaded_object_index = 0;
         break;
 
     case Sphere:
-        obj->shaded_obj = sphere_shaded_object;
+        obj->shaded_object_index = 1;
         break;
 
     case PointLight:
-        obj->shaded_obj = pointLight_shaded_object;
+        obj->shaded_object_index = 2;
         break;
 
     case Imported:
+        num_of_models++;
+
+        //reallocate memory to shaded_objects if necessary
+        if (num_of_models > shaded_objects_size-3)
+        {
+            shaded_objects_size *= 2;
+            shaded_objects = (sobj::shaded_object **) realloc(shaded_objects, shaded_objects_size * sizeof(sobj::shaded_object *));
+            if (shaded_objects == nullptr) 
+            {
+                perror("Error allocating memory to shaded_objects in add_object\n");
+                return nullptr;
+            }
+        }
+
+        // allocate memory to new shaded_object to be loaded
         shaded_obj = (sobj::shaded_object *) malloc(sizeof(sobj::shaded_object));
         if (shaded_obj == nullptr) 
         {
             perror("Error allocating memory to shaded_obj in add_object\n");
             return nullptr;
         }
-        obj->shaded_obj = shaded_obj;
-
+        // load shaded object model
         shaded_obj->load_model_from_json(filename);
         shaded_obj->initModel();
+        // to keep track if object is duplicated later
+        obj->shaded_object_index = num_of_models-1;
+        // add the new shaded object to list
+        shaded_objects[num_of_models-1] = shaded_obj;
         break;
 
     case Empty:
-        obj->shaded_obj = nullptr;
+        obj->shaded_object_index = -1;
         break;
     }
 
@@ -266,10 +298,13 @@ struct object_model *add_object(ObjectType obj_type, const char *filename)
     return obj;
 }
 
-struct object_model *duplicate_selected_object(struct object_model *obj)
+struct object_model *duplicate_selected_object()
 {
-    num_of_objects++;
+    // if selected_object_index == 0 (no selected object) do nothing
+    if (selected_model_index <= 0)
+        return nullptr;
 
+    num_of_objects++;
     // reallocate memory to objects_model if necessary
     if (num_of_objects > object_models_size-3)
     {
@@ -277,7 +312,7 @@ struct object_model *duplicate_selected_object(struct object_model *obj)
         object_models = (struct object_model **) realloc(object_models, object_models_size * sizeof(struct object_model *));
         if (object_models == nullptr) 
         {
-            perror("Error allocating memory to object_model in add_object\n");
+            perror("Error allocating memory to object_model in duplicate_selected_object\n");
             return nullptr;
         }
     }
@@ -286,31 +321,34 @@ struct object_model *duplicate_selected_object(struct object_model *obj)
     struct object_model *new_obj = (struct object_model *) malloc(sizeof(struct object_model));
     if (new_obj == nullptr) 
     {
-        perror("Error allocating memory to obj in add_object\n");
+        perror("Error allocating memory to new_obj in duplicate_selected_object\n");
         return nullptr;
     }
 
-    // Point to original object information
-    new_obj->shaded_obj = obj->shaded_obj;
+    struct object_model *old_obj = object_models[selected_model_index];
+    // Do not duplicate Point Light
+    if (old_obj->object_type == PointLight)
+        return nullptr;
+
+    // Point to original shaded_object (index in shaded_objects array)
+    new_obj->shaded_object_index = old_obj->shaded_object_index;
     
     // Duplicate object information
-    new_obj->object_type = obj->object_type;
-    new_obj->object_coordinates = obj->object_coordinates;
-    new_obj->model_matrix = obj->model_matrix;
-    new_obj->rotation_matrix = obj->rotation_matrix;
-
-    std::copy_n(obj->Theta, 3, new_obj->Theta);
-    std::copy_n(obj->Scaling, 3, new_obj->Scaling);
-    std::copy_n(obj->Translation, 3, new_obj->Translation);
-
-    // Select new object
-    obj->is_selected = false;
-    new_obj->is_selected = true;
+    new_obj->object_type = old_obj->object_type;
+    new_obj->object_coordinates = old_obj->object_coordinates;
+    new_obj->model_matrix = old_obj->model_matrix;
+    new_obj->rotation_matrix = old_obj->rotation_matrix;
+    std::copy_n(old_obj->Theta, 3, new_obj->Theta);
+    std::copy_n(old_obj->Scaling, 3, new_obj->Scaling);
+    std::copy_n(old_obj->Translation, 3, new_obj->Translation);
 
     // add object to object_models array
-    object_models[num_of_objects-1] = obj;
+    object_models[num_of_objects-1] = old_obj;
     std::cout << "Object #" << (num_of_objects-1) << " duplicated: " << *(object_models[num_of_objects-1]) << std::endl;
 
+    // Select new object
+    old_obj->is_selected = false;
+    new_obj->is_selected = true;
     return new_obj;
 }
 
@@ -371,29 +409,90 @@ void create_basic_objects()
     arrow_shaded_objects[2]->initModel();
 }
 
+// exports scene as json_file
+void save_scene_as_json(char *filename)
+{
+    struct serializable_scene scene;
+    struct serializable_model s_model;
+    struct serializable_light s_light;
+    struct serializable_mat4 s_matrix;
+
+    struct object_model *curr_object_model;
+    sobj::shaded_object *curr_shaded_object;
+
+    for (int i = 0; i < num_of_objects; i++)
+    {
+        curr_object_model = object_models[i];
+        if (curr_object_model != nullptr)
+        {
+            if (curr_object_model->object_type != Empty || curr_object_model->object_type != PointLight)
+            {
+                curr_shaded_object = shaded_objects[curr_object_model->shaded_object_index];
+                if (curr_shaded_object != nullptr)
+                {
+                    // add object model to scene models
+                    s_model = to_serializable_model(curr_shaded_object->inner_model);
+                    scene.models.push_back(s_model);
+
+                    // add object transform matrix to scene transforms
+                    // TODO: this function does not exist
+                    // s_matrix = to_serializable_mat4(curr_object_model->model_matrix);
+                    // scene.transforms.push_back(s_matrix);
+                }
+            }
+            // FIXME: This is point light
+            else if (curr_object_model->object_type == PointLight)
+            {
+                curr_shaded_object = shaded_objects[curr_object_model->shaded_object_index];
+                if (curr_shaded_object != nullptr)
+                {
+                    // TODO: this function does not exist
+                    // s_light = to_serializable_light(curr_shaded_object->inner_model);
+                    // scene.models.push_back(s_model);
+                }
+            }
+        }
+    }
+    //TODO: add other scene stuff as well
+
+
+    std::ofstream file(filename);
+    file << scene.zax_to_json(); //TODO: check this
+    file.close();
+}
+
 // create objects, vertex arrays and buffers
 void init()
 {
     // Load shaders and use the resulting shader program
-    program = InitShader("vshader.glsl", "fshader.glsl");
-    picker_program = InitShader("vshader.glsl", "fshader.glsl");
+    program = InitShader("../util/vshader_phong.glsl", "../util/fshader_phong.glsl");
+    picker_program = InitShader("../util/vshader_phong.glsl", "../util/fshader_phong.glsl");
     glUseProgram(program);
 
     // Create cube, sphere, pointLight, arrow shaded_objects
-    create_basic_objects();
+    // create_basic_objects(); //FIXME: LOAD OBJECT GIVES ERROR
 
-    // Retrieve transformation uniform variable locations
-    Model = glGetUniformLocation( program, "Model" );
-    View = glGetUniformLocation( program, "View" );
-    Projection = glGetUniformLocation( program, "Projection" );
-    
-    // Set projection matrix
+    // Create projection matrix
     GLfloat aspect_ratio = (GLfloat) SCREEN_WIDTH / (GLfloat) SCREEN_HEIGHT;
     projection_matrix = Perspective(fovy, aspect_ratio, 0.1, 15.5);
-    glUniformMatrix4fv(Projection, 1, GL_TRUE, projection_matrix);
 
     glEnable( GL_DEPTH_TEST );
     glClearColor( 1.0, 1.0, 1.0, 1.0 ); 
+
+    // allocate memory for shaded_objects array containing pointers to all shaded_objects
+    shaded_objects = (sobj::shaded_object **) malloc(shaded_objects_size * sizeof(sobj::shaded_object *));
+    if (shaded_objects == nullptr) 
+        perror("Error allocating memory to shaded_objects in init\n");
+    else 
+    {
+        // add cube, sphere, pointLight and arrows
+        shaded_objects[0] = cube_shaded_object;
+        shaded_objects[1] = sphere_shaded_object;
+        shaded_objects[2] = pointLight_shaded_object;
+        shaded_objects[3] = *arrow_shaded_objects;
+        for (int i = 4; i < shaded_objects_size; i++)
+            shaded_objects[i] = nullptr;
+    }
 
     // allocate memory for object_models array containing pointers to all object_models
     object_models = (struct object_model **) malloc(object_models_size * sizeof(struct object_model *));
@@ -401,10 +500,11 @@ void init()
         perror("Error allocating memory to object_models in init\n");
     else 
         for (int i = 0; i < object_models_size; i++)
-            object_models[i] = nullptr;
+            object_models[i] = nullptr;      
 
     // create first empty object, this will be selected when background is clicked 
     empty_object = add_object(Empty, "");
+    // pointLight_object = add_object(PointLight, POINTLIGHT_PATH); //FIXME: LOAD OBJECT GIVES ERROR
 }
 
 void draw_objects(bool with_picking)
@@ -412,58 +512,37 @@ void draw_objects(bool with_picking)
     // camera view matrix
     camera_at = camera_coordinates + camera_front;
     view_matrix = LookAt(camera_coordinates, camera_at, camera_up);
-    glUniformMatrix4fv(View, 1, GL_TRUE, view_matrix);
 
     struct object_model *curr_object_model;
+    sobj::shaded_object *curr_shaded_object;
     mat4 transform;
-    // GLsizeiptr buf_offset, buf_size;
-    // color4 *selected_color_array;
 
     for (int i = 1; i < num_of_objects; i++)
     {
         curr_object_model = object_models[i];
         if (curr_object_model != nullptr)
         {
+            curr_shaded_object = shaded_objects[curr_object_model->shaded_object_index];
             // color arrays and drawing according to selected, picking etc.
-            glBindVertexArray(curr_object_model->shaded_obj->VAO);
-            glBindBuffer(GL_ARRAY_BUFFER, curr_object_model->shaded_obj->VBO);
+            glBindVertexArray(curr_shaded_object->VAO);
+            glBindBuffer(GL_ARRAY_BUFFER, curr_shaded_object->VBO);
             
-            // buf_offset = curr_object_model->vertices_num * sizeof(point4);
-            // buf_size = curr_object_model->vertices_num * sizeof(color4);
-
             // object model matrix
             transform = view_matrix * curr_object_model->model_matrix;
-            // glUniformMatrix4fv(Model, 1, GL_TRUE, curr_object_model->model_matrix);
 
             // if not picking draw objects normally
             if (with_picking == false)
             {
                 // if object not selected then just draw it solid with its own color
 
-                //FIXME: ????
-                curr_object_model->shaded_obj->display_real(transform, projection_matrix, light_position);
-
-                // glBufferSubData(GL_ARRAY_BUFFER, buf_offset, buf_size, curr_object_model->colors_array);
-            
-                // glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-                // glDrawArrays(GL_TRIANGLES, 0, curr_object_model->vertices_num);
+                //FIXME: check if works
+                curr_shaded_object->display_real(transform, projection_matrix, light_position);
 
                 // if object is selected then also draw its wireframe with black color
                 if (curr_object_model->is_selected)
                 {
-                    // selected_color_array = (color4 *) malloc(curr_object_model->vertices_num * sizeof(color4));
-                    // if (selected_color_array == nullptr)
-                    // {
-                    //     perror("Error allocating memory to selected_color_array in draw_objects");
-                    //     return;
-                    // }
-                    // std::fill_n(selected_color_array, curr_object_model->vertices_num, color4(0.0, 0.0, 0.0, 1.0));
-                    // glBufferSubData(GL_ARRAY_BUFFER, buf_offset, buf_size, selected_color_array);
-                    // free(selected_color_array);
+                    //TODO: can we also draw object with GL_LINE here
 
-                    // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-                    // glDrawArrays(GL_TRIANGLES, 0, curr_object_model->vertices_num);
-                    
                     // draw 3 arrows on the object
                     draw_object_arrows(curr_object_model, with_picking);
                 }
@@ -471,13 +550,8 @@ void draw_objects(bool with_picking)
             // if with picking then just draw all objects with their unique picking colors
             else 
             {
-                // glBufferSubData(GL_ARRAY_BUFFER, buf_offset, buf_size, curr_object_model->picking_colors_array);
-                
-                // glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-                // glDrawArrays(GL_TRIANGLES, 0, curr_object_model->vertices_num);
-
-                //FIXME: ???
-                curr_object_model->shaded_obj->display_picker(transform, projection_matrix);
+                //FIXME: check if works
+                curr_shaded_object->display_picker(transform, projection_matrix);
 
                 // if object selected draw 3 arrows on the object with unique picking colors also
                 if (curr_object_model->is_selected)
@@ -613,39 +687,8 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
         exit(EXIT_SUCCESS);
         break;
 
-    case GLFW_KEY_C: // add new cube to screen
-        if (action == GLFW_PRESS)
-            add_object(Cube, "");
-        break;
-    case GLFW_KEY_V: // add new sphere to screen
-        if (action == GLFW_PRESS)
-            add_object(Sphere, "");
-        break;
-    case GLFW_KEY_B: // add new point light to screen
-        if (action == GLFW_PRESS)
-            add_object(PointLight, "");
-        break;
-    case GLFW_KEY_N: // add new imported object to screen
-        if (action == GLFW_PRESS)
-            add_object(Imported, "arrow.json");
-        break;
-    case GLFW_KEY_SPACE: // increase selected_model_index
-        if (action == GLFW_PRESS)
-        {
-            if (object_models[selected_model_index] != nullptr)
-                object_models[selected_model_index]->is_selected = false;
-            if (num_of_objects > 1)
-            {
-                // while (object_models[selected_model_index] != nullptr)
-                    selected_model_index = (selected_model_index+1)%num_of_objects;
-            }
-            if (object_models[selected_model_index] != nullptr)
-                object_models[selected_model_index]->is_selected = true;
-        }
-        break;
-
-    case GLFW_KEY_P: //for debugging
-        if (action == GLFW_PRESS)
+    case GLFW_KEY_P: //alt+P (option+P on mac) for debugging
+        if (action == GLFW_PRESS && mods == GLFW_MOD_ALT)
             print_all_objects();
         break;
 
@@ -811,7 +854,6 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
         fovy_changed = fovy;
 
     projection_matrix = Perspective(fovy_changed, aspect_ratio, .1, 15.5);
-    glUniformMatrix4fv(Projection, 1, GL_TRUE, projection_matrix);
 }
 
 int main(int argc, char *argv[])
@@ -866,7 +908,8 @@ int main(int argc, char *argv[])
         update();
         display();
 
-        ///////
+        // ImGUI start
+
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
@@ -889,33 +932,28 @@ int main(int argc, char *argv[])
         
         if (ImGui::Button("Load Model"))
         {
-            //TODO:
-            printf("load model button pressed\n");
+            add_object(Imported, filename);
         }
         ImGui::EndChild();
 
-        ImGui::BeginChild("???? Box", ImVec2(-1, 100), true,
+        ImGui::BeginChild("Transform Object Box", ImVec2(-1, 200), true,
                         ImGuiWindowFlags_HorizontalScrollbar);
 
-        if (ImGui::Button("??? Shader sth"))
+        if (ImGui::Button("Edit object in Shader Editor"))
         {
-            //TODO:
+            //TODO: connect to shader_program
             printf("shader editor open button pressed\n");
         }
         if (ImGui::Button("Duplicate Object"))
         {
-            //TODO:
-            printf("duplicate object button pressed\n");
+            duplicate_selected_object();
         }
         if (ImGui::Button("Delete Object"))
         {
             delete_selected_object();
         }
-        ImGui::EndChild();
 
-        ImGui::BeginChild("Transform Object Box", ImVec2(-1, 100), true,
-                        ImGuiWindowFlags_HorizontalScrollbar);
-
+        ImGui::TextWrapped("\nTransform object:");
         if (ImGui::Button("Move Object"))
         {
             selected_action = TranslateObject;
@@ -930,12 +968,25 @@ int main(int argc, char *argv[])
         }
         ImGui::EndChild();
 
+        ImGui::BeginChild("Save Scene Box", ImVec2(-1, 100), true,
+                        ImGuiWindowFlags_HorizontalScrollbar);
+
+        ImGui::TextWrapped("Save Scene Path:");
+        static char filename2[256] = "";
+        ImGui::InputText("File path", filename2, sizeof(filename2));
+        if (ImGui::Button("Save Scene")) 
+        {
+            save_scene_as_json(filename2); 
+        }
+
+        ImGui::EndChild();
+
         ImGui::End();
 
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-        //////
+        // ImGUI end
 
         if (!display_picking)
             glfwSwapBuffers(window);
