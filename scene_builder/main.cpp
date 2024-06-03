@@ -11,9 +11,6 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
-#include <algorithm>
-
-
 #if defined(__linux__) || defined(_WIN32)
     #include <GL/gl.h>
 #elif defined(__APPLE__)
@@ -166,24 +163,24 @@ void draw_object_arrows(struct object_model *obj, bool with_picking)
 
     // y-axis arrow
     if (with_picking)
-        arrow_shaded_objects[1]->display_picker(arrow_model_matrices[1], projection_matrix);
+        arrow_shaded_objects[1]->display_picker(view_matrix * arrow_model_matrices[1], projection_matrix);
     else
-        arrow_shaded_objects[1]->display_real(arrow_model_matrices[1], projection_matrix, light_position);
+        arrow_shaded_objects[1]->display_real(view_matrix * arrow_model_matrices[1], projection_matrix, light_position);
 
     if (selected_action == ScaleObject)
         return;
 
     // x-axis arrow
     if (with_picking)
-        arrow_shaded_objects[0]->display_picker(arrow_model_matrices[0], projection_matrix);
+        arrow_shaded_objects[0]->display_picker(view_matrix * arrow_model_matrices[0], projection_matrix);
     else
-        arrow_shaded_objects[0]->display_real(arrow_model_matrices[0], projection_matrix, light_position);
+        arrow_shaded_objects[0]->display_real(view_matrix * arrow_model_matrices[0], projection_matrix, light_position);
 
     // z-axis arrow
     if (with_picking)
-        arrow_shaded_objects[2]->display_picker(arrow_model_matrices[2], projection_matrix);
+        arrow_shaded_objects[2]->display_picker(view_matrix * arrow_model_matrices[2], projection_matrix);
     else
-        arrow_shaded_objects[2]->display_real(arrow_model_matrices[2], projection_matrix, light_position);
+        arrow_shaded_objects[2]->display_real(view_matrix * arrow_model_matrices[2], projection_matrix, light_position);
 }
 
 
@@ -204,7 +201,7 @@ struct object_model *add_object(ObjectType obj_type, const char *filename)
     num_of_objects++;
 
     // reallocate memory to objects_model if necessary
-    if (num_of_objects > object_models_size-3)
+    if (num_of_objects > object_models_size)
     {
         object_models_size *= 2;
         object_models = (struct object_model **) realloc(object_models, object_models_size * sizeof(struct object_model *));
@@ -254,7 +251,7 @@ struct object_model *add_object(ObjectType obj_type, const char *filename)
         num_of_models++;
 
         //reallocate memory to shaded_objects if necessary
-        if (num_of_models > shaded_objects_size-3)
+        if (num_of_models > shaded_objects_size)
         {
             shaded_objects_size *= 2;
             shaded_objects = (sobj::shaded_object **) realloc(shaded_objects, shaded_objects_size * sizeof(sobj::shaded_object *));
@@ -284,7 +281,7 @@ struct object_model *add_object(ObjectType obj_type, const char *filename)
         break;
 
     case Empty:
-        obj->shaded_object_index = -1;
+        // obj->shaded_object_index = -1;
         break;
     }
 
@@ -418,6 +415,7 @@ void create_basic_objects()
     arrow_shaded_objects[0]->Program = program;
     arrow_shaded_objects[0]->PickerProgram = picker_program;
     arrow_shaded_objects[0]->initModel();
+    arrow_shaded_objects[0]->unique_color = INT_TO_UNIQUE_COLOR(1);
     printf("arrow loaded\n");
 
     arrow_shaded_objects[1] = (sobj::shaded_object *) malloc(sizeof(sobj::shaded_object));
@@ -425,12 +423,14 @@ void create_basic_objects()
     arrow_shaded_objects[1]->Program = program;
     arrow_shaded_objects[1]->PickerProgram = picker_program;
     arrow_shaded_objects[1]->initModel();
+    arrow_shaded_objects[1]->unique_color = INT_TO_UNIQUE_COLOR(2);
 
     arrow_shaded_objects[2] = (sobj::shaded_object *) malloc(sizeof(sobj::shaded_object));
     arrow_shaded_objects[2]->load_model_from_json(ARROW_PATH_3);
     arrow_shaded_objects[2]->Program = program;
     arrow_shaded_objects[2]->PickerProgram = picker_program;
     arrow_shaded_objects[2]->initModel();
+    arrow_shaded_objects[2]->unique_color = INT_TO_UNIQUE_COLOR(3);
 }
 
 // Convert current objects to scene struct
@@ -791,12 +791,14 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
             object_models[selected_model_index]->is_selected = false;
             selected_model_index = index-1;
             object_models[selected_model_index]->is_selected = true;
+            std::cout << "Selected model index: " << selected_model_index << " model is: " << object_models[selected_model_index] << "\n";
         }
         // if object arrows selected
         else if (0 <= index+4 && index+4 <= 3) // 0: Empty, 1-3: reserved for arrows so +4
         {
             object_arrow_selected = true;
             object_arrow_selected_axis = index+4; //x=1, y=2, z=3
+            std::cout << "Selected arrow index: " << object_arrow_selected << "\n";
         }
         
         if (display_picking)
