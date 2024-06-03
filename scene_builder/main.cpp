@@ -26,6 +26,8 @@
 #define SCREEN_WIDTH 1200
 #define SCREEN_HEIGHT 600
 
+#define SHADER_EDITOR_EXE_PATH "../shader_editor/shader_editor"
+
 #define CUBE_PATH "../test/cube.json"
 #define SPHERE_PATH "../test/tetrahedron.json"
 #define POINTLIGHT_PATH "../test/tetrahedron.json" //FIXME: smaller yellow sphere
@@ -269,6 +271,8 @@ struct object_model *add_object(ObjectType obj_type, const char *filename)
         }
         // load shaded object model
         shaded_obj->load_model_from_json(filename);
+        shaded_obj->Program = program;
+        shaded_obj->PickerProgram = picker_program;
         shaded_obj->initModel();
         // to keep track if object is duplicated later
         obj->shaded_object_index = num_of_models-1;
@@ -357,7 +361,7 @@ struct object_model *duplicate_selected_object()
 void delete_selected_object()
 {
     struct object_model *obj = object_models[selected_model_index];
-    if (obj->object_type == Empty)
+    if (obj->object_type == Empty || obj->object_type == PointLight)
         return;
 
     if (obj != nullptr)
@@ -387,26 +391,42 @@ void create_basic_objects()
 {
     cube_shaded_object = (sobj::shaded_object *) malloc(sizeof(sobj::shaded_object));
     cube_shaded_object->load_model_from_json(CUBE_PATH);
+    cube_shaded_object->Program = program;
+    cube_shaded_object->PickerProgram = picker_program;
     cube_shaded_object->initModel();
+    printf("cube loaded\n");
 
     sphere_shaded_object = (sobj::shaded_object *) malloc(sizeof(sobj::shaded_object));
     sphere_shaded_object->load_model_from_json(SPHERE_PATH);
+    sphere_shaded_object->Program = program;
+    sphere_shaded_object->PickerProgram = picker_program;
     sphere_shaded_object->initModel();
+    printf("sphere loaded\n");
 
     pointLight_shaded_object = (sobj::shaded_object *) malloc(sizeof(sobj::shaded_object));
     pointLight_shaded_object->load_model_from_json(POINTLIGHT_PATH);
+    pointLight_shaded_object->Program = program;
+    pointLight_shaded_object->PickerProgram = picker_program;
     pointLight_shaded_object->initModel();
+    printf("pointLight loaded\n");
 
     arrow_shaded_objects[0] = (sobj::shaded_object *) malloc(sizeof(sobj::shaded_object));
     arrow_shaded_objects[0]->load_model_from_json(ARROW_PATH_1);
+    arrow_shaded_objects[0]->Program = program;
+    arrow_shaded_objects[0]->PickerProgram = picker_program;
     arrow_shaded_objects[0]->initModel();
+    printf("arrow loaded\n");
 
     arrow_shaded_objects[1] = (sobj::shaded_object *) malloc(sizeof(sobj::shaded_object));
     arrow_shaded_objects[1]->load_model_from_json(ARROW_PATH_2);
+    arrow_shaded_objects[1]->Program = program;
+    arrow_shaded_objects[1]->PickerProgram = picker_program;
     arrow_shaded_objects[1]->initModel();
 
     arrow_shaded_objects[2] = (sobj::shaded_object *) malloc(sizeof(sobj::shaded_object));
     arrow_shaded_objects[2]->load_model_from_json(ARROW_PATH_3);
+    arrow_shaded_objects[2]->Program = program;
+    arrow_shaded_objects[2]->PickerProgram = picker_program;
     arrow_shaded_objects[2]->initModel();
 }
 
@@ -476,7 +496,7 @@ void init()
     glUseProgram(program);
 
     // Create cube, sphere, pointLight, arrow shaded_objects
-    // create_basic_objects(); //FIXME: LOAD OBJECT GIVES ERROR
+    create_basic_objects(); //FIXME: LOAD OBJECT GIVES ERROR
 
     // Create projection matrix
     GLfloat aspect_ratio = (GLfloat) SCREEN_WIDTH / (GLfloat) SCREEN_HEIGHT;
@@ -512,6 +532,7 @@ void init()
     empty_object = add_object(Empty, "");
     // also create the point light object as a small yellow sphere
     // pointLight_object = add_object(PointLight, POINTLIGHT_PATH); //FIXME: LOAD OBJECT GIVES ERROR
+    add_object(Cube, "");
 }
 
 void draw_objects(bool with_picking)
@@ -945,13 +966,26 @@ int main(int argc, char *argv[])
         }
         ImGui::EndChild();
 
+        ImGui::BeginChild("Add Cube and Sphere Box", ImVec2(-1, 60), true,
+                        ImGuiWindowFlags_HorizontalScrollbar);
+        if (ImGui::Button("Add Cube"))
+        {
+            add_object(Cube, "");
+        }
+        if (ImGui::Button("Add Sphere"))
+        {
+            add_object(Sphere, "");
+        }
+        ImGui::EndChild();
+
         ImGui::BeginChild("Transform Object Box", ImVec2(-1, 200), true,
                         ImGuiWindowFlags_HorizontalScrollbar);
 
         if (ImGui::Button("Edit object in Shader Editor"))
         {
-            //TODO: connect to shader_program
-            printf("shader editor open button pressed\n");
+            // TODO: this requires shader_editor shaders to have "../shader_editor/vhsader.glsl" etc.
+            system("../shader_editor/shader_editor");
+            // TODO: Also how do we give model information to shader_editor??
         }
         if (ImGui::Button("Duplicate Object"))
         {
