@@ -13,12 +13,11 @@ Today's goal is to visualize a simple triangle with no lighting
 #else
 #include <OpenCL/opencl.h>
 #endif
+#include <math.h>
+#include <png.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-#include <math.h>
-#include <stdbool.h>
-#include <png.h>
-
 
 //-----------------------PNG-----------------------------
 
@@ -225,10 +224,6 @@ void translate_traingle(triangle t, float x, float y, float z) {
 }
 
 int main() {
-
-
-
-
 
   cl_int err;
   cl_device_id device = create_device();

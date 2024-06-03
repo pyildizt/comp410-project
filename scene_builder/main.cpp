@@ -11,6 +11,8 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <algorithm>
+
 #if defined(__linux__) || defined(_WIN32)
     #include <GL/gl.h>
 #elif defined(__APPLE__)
@@ -25,6 +27,8 @@
 
 #define SCREEN_WIDTH 1200
 #define SCREEN_HEIGHT 600
+
+#define SHADER_EDITOR_EXE_PATH "../shader_editor/shader_editor"
 
 #define CUBE_PATH "../test/cube.json"
 #define SPHERE_PATH "../test/tetrahedron.json"
@@ -71,6 +75,8 @@ int selected_model_index = 0; // first object model is empty and selected
 int num_of_objects = 0;       // first object model is empty and selected
 int num_of_models = 4;
 
+std::map<std::string, GLuint> texturePointers;
+
 GLuint program, picker_program;
 mat4 view_matrix, projection_matrix;
 mat4 arrow_model_matrices[3];
@@ -91,6 +97,14 @@ struct object_model *empty_object;
 struct object_model *pointLight_object;
 struct object_model **object_models;
 int object_models_size = 10;
+
+sobj::shaded_object* get_empty_object()
+{
+    sobj::shaded_object obj = sobj::shaded_object();
+    auto ptr = (sobj::shaded_object *) malloc(sizeof(sobj::shaded_object));
+    memcpy(ptr, &obj, sizeof(sobj::shaded_object));
+    return ptr;
+}
 
 void create_object_matrices(struct object_model *obj)
 {
@@ -161,24 +175,24 @@ void draw_object_arrows(struct object_model *obj, bool with_picking)
 
     // y-axis arrow
     if (with_picking)
-        arrow_shaded_objects[1]->display_picker(arrow_model_matrices[1], projection_matrix);
+        arrow_shaded_objects[1]->display_picker(view_matrix * arrow_model_matrices[1], projection_matrix);
     else
-        arrow_shaded_objects[1]->display_real(arrow_model_matrices[1], projection_matrix, light_position);
+        arrow_shaded_objects[1]->display_real(view_matrix * arrow_model_matrices[1], projection_matrix, light_position);
 
     if (selected_action == ScaleObject)
         return;
 
     // x-axis arrow
     if (with_picking)
-        arrow_shaded_objects[0]->display_picker(arrow_model_matrices[0], projection_matrix);
+        arrow_shaded_objects[0]->display_picker(view_matrix * arrow_model_matrices[0], projection_matrix);
     else
-        arrow_shaded_objects[0]->display_real(arrow_model_matrices[0], projection_matrix, light_position);
+        arrow_shaded_objects[0]->display_real(view_matrix * arrow_model_matrices[0], projection_matrix, light_position);
 
     // z-axis arrow
     if (with_picking)
-        arrow_shaded_objects[2]->display_picker(arrow_model_matrices[2], projection_matrix);
+        arrow_shaded_objects[2]->display_picker(view_matrix * arrow_model_matrices[2], projection_matrix);
     else
-        arrow_shaded_objects[2]->display_real(arrow_model_matrices[2], projection_matrix, light_position);
+        arrow_shaded_objects[2]->display_real(view_matrix * arrow_model_matrices[2], projection_matrix, light_position);
 }
 
 
@@ -199,7 +213,7 @@ struct object_model *add_object(ObjectType obj_type, const char *filename)
     num_of_objects++;
 
     // reallocate memory to objects_model if necessary
-    if (num_of_objects > object_models_size-3)
+    if (num_of_objects > object_models_size)
     {
         object_models_size *= 2;
         object_models = (struct object_model **) realloc(object_models, object_models_size * sizeof(struct object_model *));
@@ -249,7 +263,7 @@ struct object_model *add_object(ObjectType obj_type, const char *filename)
         num_of_models++;
 
         //reallocate memory to shaded_objects if necessary
-        if (num_of_models > shaded_objects_size-3)
+        if (num_of_models > shaded_objects_size)
         {
             shaded_objects_size *= 2;
             shaded_objects = (sobj::shaded_object **) realloc(shaded_objects, shaded_objects_size * sizeof(sobj::shaded_object *));
@@ -261,14 +275,16 @@ struct object_model *add_object(ObjectType obj_type, const char *filename)
         }
 
         // allocate memory to new shaded_object to be loaded
-        shaded_obj = (sobj::shaded_object *) malloc(sizeof(sobj::shaded_object));
+        shaded_obj = get_empty_object();
         if (shaded_obj == nullptr) 
         {
             perror("Error allocating memory to shaded_obj in add_object\n");
             return nullptr;
         }
         // load shaded object model
-        shaded_obj->load_model_from_json(filename);
+        shaded_obj->load_model_from_json(filename, texturePointers);
+        shaded_obj->Program = program;
+        shaded_obj->PickerProgram = picker_program;
         shaded_obj->initModel();
         // to keep track if object is duplicated later
         obj->shaded_object_index = num_of_models-1;
@@ -277,7 +293,7 @@ struct object_model *add_object(ObjectType obj_type, const char *filename)
         break;
 
     case Empty:
-        obj->shaded_object_index = -1;
+        // obj->shaded_object_index = -1;
         break;
     }
 
@@ -357,7 +373,7 @@ struct object_model *duplicate_selected_object()
 void delete_selected_object()
 {
     struct object_model *obj = object_models[selected_model_index];
-    if (obj->object_type == Empty)
+    if (obj->object_type == Empty || obj->object_type == PointLight)
         return;
 
     if (obj != nullptr)
@@ -385,29 +401,49 @@ void print_all_objects()
 // load and create cube, sphere and the arrow model for object transformation
 void create_basic_objects()
 {
-    cube_shaded_object = (sobj::shaded_object *) malloc(sizeof(sobj::shaded_object));
-    cube_shaded_object->load_model_from_json(CUBE_PATH);
+    
+    cube_shaded_object = get_empty_object();
+    cube_shaded_object->load_model_from_json(CUBE_PATH, texturePointers);
+    cube_shaded_object->Program = program;
+    cube_shaded_object->PickerProgram = picker_program;
     cube_shaded_object->initModel();
+    printf("cube loaded\n");
 
-    sphere_shaded_object = (sobj::shaded_object *) malloc(sizeof(sobj::shaded_object));
-    sphere_shaded_object->load_model_from_json(SPHERE_PATH);
+    sphere_shaded_object = get_empty_object();
+    sphere_shaded_object->load_model_from_json(SPHERE_PATH, texturePointers);
+    sphere_shaded_object->Program = program;
+    sphere_shaded_object->PickerProgram = picker_program;
     sphere_shaded_object->initModel();
+    printf("sphere loaded\n");
 
-    pointLight_shaded_object = (sobj::shaded_object *) malloc(sizeof(sobj::shaded_object));
-    pointLight_shaded_object->load_model_from_json(POINTLIGHT_PATH);
+    pointLight_shaded_object =  get_empty_object();
+    pointLight_shaded_object->load_model_from_json(POINTLIGHT_PATH, texturePointers);
+    pointLight_shaded_object->Program = program;
+    pointLight_shaded_object->PickerProgram = picker_program;
     pointLight_shaded_object->initModel();
+    printf("pointLight loaded\n");
 
-    arrow_shaded_objects[0] = (sobj::shaded_object *) malloc(sizeof(sobj::shaded_object));
-    arrow_shaded_objects[0]->load_model_from_json(ARROW_PATH_1);
+    arrow_shaded_objects[0] =  get_empty_object();
+    arrow_shaded_objects[0]->load_model_from_json(ARROW_PATH_1, texturePointers);
+    arrow_shaded_objects[0]->Program = program;
+    arrow_shaded_objects[0]->PickerProgram = picker_program;
     arrow_shaded_objects[0]->initModel();
+    arrow_shaded_objects[0]->unique_color = INT_TO_UNIQUE_COLOR(1);
+    printf("arrow loaded\n");
 
-    arrow_shaded_objects[1] = (sobj::shaded_object *) malloc(sizeof(sobj::shaded_object));
-    arrow_shaded_objects[1]->load_model_from_json(ARROW_PATH_2);
+    arrow_shaded_objects[1] =  get_empty_object();
+    arrow_shaded_objects[1]->load_model_from_json(ARROW_PATH_2, texturePointers);
+    arrow_shaded_objects[1]->Program = program;
+    arrow_shaded_objects[1]->PickerProgram = picker_program;
     arrow_shaded_objects[1]->initModel();
+    arrow_shaded_objects[1]->unique_color = INT_TO_UNIQUE_COLOR(2);
 
-    arrow_shaded_objects[2] = (sobj::shaded_object *) malloc(sizeof(sobj::shaded_object));
-    arrow_shaded_objects[2]->load_model_from_json(ARROW_PATH_3);
+    arrow_shaded_objects[2] =  get_empty_object();
+    arrow_shaded_objects[2]->load_model_from_json(ARROW_PATH_3, texturePointers);
+    arrow_shaded_objects[2]->Program = program;
+    arrow_shaded_objects[2]->PickerProgram = picker_program;
     arrow_shaded_objects[2]->initModel();
+    arrow_shaded_objects[2]->unique_color = INT_TO_UNIQUE_COLOR(3);
 }
 
 // Convert current objects to scene struct
@@ -476,7 +512,7 @@ void init()
     glUseProgram(program);
 
     // Create cube, sphere, pointLight, arrow shaded_objects
-    // create_basic_objects(); //FIXME: LOAD OBJECT GIVES ERROR
+    create_basic_objects(); //FIXME: LOAD OBJECT GIVES ERROR
 
     // Create projection matrix
     GLfloat aspect_ratio = (GLfloat) SCREEN_WIDTH / (GLfloat) SCREEN_HEIGHT;
@@ -512,6 +548,7 @@ void init()
     empty_object = add_object(Empty, "");
     // also create the point light object as a small yellow sphere
     // pointLight_object = add_object(PointLight, POINTLIGHT_PATH); //FIXME: LOAD OBJECT GIVES ERROR
+    add_object(Cube, "");
 }
 
 void draw_objects(bool with_picking)
@@ -767,12 +804,14 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
             object_models[selected_model_index]->is_selected = false;
             selected_model_index = index-1;
             object_models[selected_model_index]->is_selected = true;
+            std::cout << "Selected model index: " << selected_model_index << " model is: " << object_models[selected_model_index] << "\n";
         }
         // if object arrows selected
         else if (0 <= index+4 && index+4 <= 3) // 0: Empty, 1-3: reserved for arrows so +4
         {
             object_arrow_selected = true;
             object_arrow_selected_axis = index+4; //x=1, y=2, z=3
+            std::cout << "Selected arrow index: " << object_arrow_selected << "\n";
         }
         
         if (display_picking)
@@ -945,13 +984,26 @@ int main(int argc, char *argv[])
         }
         ImGui::EndChild();
 
+        ImGui::BeginChild("Add Cube and Sphere Box", ImVec2(-1, 60), true,
+                        ImGuiWindowFlags_HorizontalScrollbar);
+        if (ImGui::Button("Add Cube"))
+        {
+            add_object(Cube, "");
+        }
+        if (ImGui::Button("Add Sphere"))
+        {
+            add_object(Sphere, "");
+        }
+        ImGui::EndChild();
+
         ImGui::BeginChild("Transform Object Box", ImVec2(-1, 200), true,
                         ImGuiWindowFlags_HorizontalScrollbar);
 
         if (ImGui::Button("Edit object in Shader Editor"))
         {
-            //TODO: connect to shader_program
-            printf("shader editor open button pressed\n");
+            // TODO: this requires shader_editor shaders to have "../shader_editor/vhsader.glsl" etc.
+            system("../shader_editor/shader_editor");
+            // TODO: Also how do we give model information to shader_editor??
         }
         if (ImGui::Button("Duplicate Object"))
         {
