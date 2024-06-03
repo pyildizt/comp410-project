@@ -1,8 +1,48 @@
-all: clean build
+# Compiler
+CXX := g++
 
+# Directories
+SRCDIR := .
+UTILDIR := ../util
+ZAXDIR := ../extern/zax-parser/src
+INCDIR := ../include
+IMGUI_DIR := ../extern/imgui-1.90.5
+
+# Compiler flags -ggdb
+CXXFLAGS := -std=c++11 -I$(INCDIR) -I$(UTILDIR) -I$(ZAXDIR) -I$(IMGUI_DIR) -I$(IMGUI_DIR)/backends -O3 
+
+LDFLAGS := -lGLEW -lGL -lglfw -lpng -lpthread
+
+# Source files
+SRCS := $(wildcard $(SRCDIR)/*.cpp) $(wildcard $(UTILDIR)/*.cpp) $(wildcard $(ZAXDIR)/*.cpp)
+SRCS += $(IMGUI_DIR)/imgui.cpp $(IMGUI_DIR)/imgui_demo.cpp $(IMGUI_DIR)/imgui_draw.cpp $(IMGUI_DIR)/imgui_tables.cpp $(IMGUI_DIR)/imgui_widgets.cpp
+SRCS += $(IMGUI_DIR)/backends/imgui_impl_glfw.cpp $(IMGUI_DIR)/backends/imgui_impl_opengl3.cpp
+
+# Object files
+OBJS := $(SRCS:.cpp=.o)
+
+# Executable name
+EXEC := main
+
+.PHONY: all clean
+
+# Default target
+all: $(EXEC)
+
+# Linking
+$(EXEC): $(OBJS)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+
+# Compiling
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+rutil:
+	rm -f $(UTILDIR)/*.o
+
+# Clean
 clean:
-	rm -f trace
-	rm -f test.png
+	rm -f $(OBJS) $(EXEC)
 
-build:
-	clang trace.c -o trace -lOpenCL -lpng -DCL_TARGET_OPENCL_VERSION=120
+run: $(EXEC)
+	./$(EXEC)

@@ -3,6 +3,7 @@
 
 #include "data_types.hpp"
 #include "load_model.hpp"
+#include "mat.h"
 #include "model_projections.hpp"
 #include "png_utils.hpp"
 #if defined(__linux__) || defined(_WIN32)
@@ -243,6 +244,7 @@ public:
    * @param lightPosition currently only supports one light
    */
   void display_real(mat4 transform, mat4 projection, vec4 lightPosition) {
+    transform = transform * Scale(.1, .1, .1);
     OPGL();
     OPGL(glUseProgram(Program));
     OPGL(glBindVertexArray(VAO));

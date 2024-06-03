@@ -1,57 +1,26 @@
 /*
 
-Today's goal is to visualize a simple raytracer::triangle with no lighting
+Today's goal is to visualize a simple triangle with no lighting
 
 */
 
-//---------------------------------------------------------
-
-#include <CL/cl_platform.h>
-#include <cstdlib>
-#define CL_RUN(fnc, ...)                                                       \
-  fnc(__VA_ARGS__, &err);                                                      \
-  if (err < 0) {                                                               \
-    printf("CL ERROR AT LINE %d\n", __LINE__);                                 \
-    perror("err");                                                             \
-    exit(1);                                                                   \
-  }
-
-#define CL_RUN3(exp)                                                           \
-  exp;                                                                         \
-  if (err < 0) {                                                               \
-    printf("CL ERROR AT LINE %d, err: %d\n", __LINE__, err);                   \
-    perror("err");                                                             \
-    exit(1);                                                                   \
-  }
-
-#define CL_RUN2(fnc)                                                           \
-  do {                                                                         \
-    cl_int err = fnc;                                                          \
-    if (err < 0) {                                                             \
-      printf("CL ERROR AT LINE %d %d\n", __LINE__, err);                       \
-      perror("err");                                                           \
-      exit(1);                                                                 \
-    }                                                                          \
-  } while (0);
-//---------------------------------------------------------
-
 // C standard includes
-#include <stdio.h>
-
-// OpenCL includes
-#ifdef __linux__
-#include <CL/cl.h>
-#else
-#include <OpenCL/opencl.h>
-#endif
+#include "mat.h"
+#include <data_types.hpp>
+#include <fstream>
+#include <iostream>
+#include <load_model.hpp>
 #include <math.h>
 #include <png.h>
+#include <pthread.h>
+#include <sstream>
 #include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define NUM_PIXELS_X 32
-#define NUM_PIXELS_Y 32
+#define NUM_PIXELS_X 256
+#define NUM_PIXELS_Y 256
 #define OUT_BUFFER_LEN (NUM_PIXELS_X * NUM_PIXELS_Y)
 
 typedef unsigned char uchar;
@@ -89,7 +58,7 @@ void save_png(const char *filename, unsigned char *data, int width,
   png_bytep *row_pointers = (png_bytep *)malloc(sizeof(png_bytep) * height);
   for (int y = 0; y < height; y++) {
     row_pointers[y] =
-        (png_bytep)&data[y * width * 4]; // Assuming 4 channels (raytracer::RGB)
+        (png_bytep)&data[y * width * 4]; // Assuming 4 channels (RGB)
   }
 
   png_init_io(png_ptr, fp);
@@ -100,109 +69,6 @@ void save_png(const char *filename, unsigned char *data, int width,
   png_destroy_write_struct(&png_ptr, &info_ptr);
   fclose(fp);
   free(row_pointers);
-}
-//------ THE FOLLOWING TAKEN FROM OPENCL EXAMPLES --------
-
-/* Find a GPU or CPU associated with the first available platform
-
-The `platform` structure identifies the first platform identified by the
-OpenCL runtime. A platform identifies a vendor's installation, so a system
-may have an NVIDIA platform and an AMD platform.
-
-The `device` structure corresponds to the first accessible device
-associated with the platform. Because the second parameter is
-`CL_DEVICE_TYPE_GPU`, this device must be a GPU.
-*/
-cl_device_id create_device() {
-
-  cl_platform_id platform;
-  cl_device_id dev;
-  int err;
-
-  /* Identify a platform */
-  err = clGetPlatformIDs(1, &platform, NULL);
-  if (err < 0) {
-    perror("Couldn't identify a platform");
-    exit(1);
-  }
-
-  // Access a device
-  // GPU
-  err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &dev, NULL);
-  if (err == CL_DEVICE_NOT_FOUND) {
-    // CPU
-    printf("Cannot find GPU, run on CPU \n");
-    err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_CPU, 1, &dev, NULL);
-  }
-  if (err < 0) {
-    perror("Couldn't access any devices");
-    exit(1);
-  }
-
-  return dev;
-}
-
-/* Create program from a file and compile it */
-cl_program build_program(cl_context ctx, cl_device_id dev,
-                         const char *filename) {
-
-  cl_program program;
-  FILE *program_handle;
-  char *program_buffer, *program_log;
-  size_t program_size, log_size;
-  int err;
-
-  /* Read program file and place content into buffer */
-  program_handle = fopen(filename, "r");
-  if (program_handle == NULL) {
-    perror("Couldn't find the program file");
-    exit(1);
-  }
-  fseek(program_handle, 0, SEEK_END);
-  program_size = ftell(program_handle);
-  rewind(program_handle);
-  program_buffer = (char *)malloc(program_size + 1);
-  program_buffer[program_size] = '\0';
-  fread(program_buffer, sizeof(char), program_size, program_handle);
-  fclose(program_handle);
-
-  /* Create program from file
-
-  Creates a program from the source code in the add_numbers.cl file.
-  Specifically, the code reads the file's content into a char array
-  called program_buffer, and then calls clCreateProgramWithSource.
-  */
-  program = clCreateProgramWithSource(ctx, 1, (const char **)&program_buffer,
-                                      &program_size, &err);
-  if (err < 0) {
-    perror("Couldn't create the program");
-    exit(1);
-  }
-  free(program_buffer);
-
-  /* Build program
-
-  The fourth parameter accepts options that configure the compilation.
-  These are similar to the flags used by gcc. For example, you can
-  define a macro with the option -DMACRO=VALUE and turn off optimization
-  with -cl-opt-disable.
-  */
-  err = clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
-  if (err < 0) {
-
-    /* Find size of log and print to std output */
-    clGetProgramBuildInfo(program, dev, CL_PROGRAM_BUILD_LOG, 0, NULL,
-                          &log_size);
-    program_log = (char *)malloc(log_size + 1);
-    program_log[log_size] = '\0';
-    clGetProgramBuildInfo(program, dev, CL_PROGRAM_BUILD_LOG, log_size + 1,
-                          program_log, NULL);
-    printf("%s\n", program_log);
-    free(program_log);
-    exit(1);
-  }
-
-  return program;
 }
 
 float my_ceil(double x);
@@ -230,7 +96,6 @@ double random_double_between_0_1_giver(uint *seed) {
   return (double)(state) / (double)(m);
   ;
 }
-namespace raytracer {
 typedef struct {
   uchar R;
   uchar G;
@@ -258,26 +123,25 @@ typedef struct {
   int number_of_elements;
 } Vector3D_array;
 
-#define SPECTRUM_SIZE (((700 - 380) / 5 + 1))
-
 typedef struct {
-  double spectrum[(int)SPECTRUM_SIZE];
+  double spectrum[(int)(((700 - 380) / 5 + 1))];
   int number_of_elements;
 
 } spectrum_of_light;
 
 typedef struct {
-  raytracer::spectrum_of_light surface_spectrum;
+  spectrum_of_light surface_spectrum;
   double diffusion_coefficient;
 
 } surface;
 
 typedef struct {
-  raytracer::surface surface_array[50]; // we have at maximum 50 different
-                                        // raytracer::surface propoerties
+  surface
+      surface_array[50]; // we have at maximum 50 different surface propoerties
 
 } surface_array;
 
+namespace ray_tracer {
 typedef struct {
   Vector3D coordinates1;
   Vector3D coordinates2;
@@ -285,10 +149,12 @@ typedef struct {
   int surface_number;
 
 } triangle;
+} // namespace ray_tracer
 
+#define MAX_NUM_TRIS 32000
 typedef struct {
-  triangle all_triangles[2000]; // we have at maximum 2000 distinct
-                                // raytracer::triangles
+  ray_tracer::triangle
+      all_triangles[MAX_NUM_TRIS]; // we have at maximum 2000 distinct triangles
   int total_number_of_triangles;
 
 } triangle_array;
@@ -296,34 +162,30 @@ typedef struct {
 typedef struct {
   Vector3D ray_current_coordinates;
   Vector3D ray_direction;
-  raytracer::spectrum_of_light ray_spectrum;
+  spectrum_of_light ray_spectrum;
   int recursion_index;
 
 } ray;
 
-} // namespace raytracer
-
-typedef raytracer::Vector3D Vector3D;
-typedef raytracer::ray ray;
-
-raytracer::Vector3D normalize(raytracer::Vector3D v) {
+Vector3D normalize(Vector3D v) {
   double length = sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-  return (raytracer::Vector3D){v.x / length, v.y / length, v.z / length};
+  return (Vector3D){v.x / length, v.y / length, v.z / length};
 }
 
-void add_second_spectrum_to_first_one(raytracer::spectrum_of_light *s1,
-                                      raytracer::spectrum_of_light s2);
-void add_second_spectrum_to_first_one(raytracer::spectrum_of_light *s1,
-                                      raytracer::spectrum_of_light s2) {
+void add_second_spectrum_to_first_one(spectrum_of_light *s1,
+                                      spectrum_of_light s2);
+void add_second_spectrum_to_first_one(spectrum_of_light *s1,
+                                      spectrum_of_light s2) {
   for (int i = 0; i < s1->number_of_elements; i++) {
     s1->spectrum[i] += s2.spectrum[i];
   }
 }
 
-raytracer::Vector3D give_the_normal_of_a_triangle(
-    raytracer::triangle
+Vector3D give_the_normal_of_a_triangle(ray_tracer::triangle input);
+Vector3D give_the_normal_of_a_triangle(
+    ray_tracer::triangle
         input) { // Source:
-                 // https://stackoverflow.com/questions/19350792/calculate-normal-of-a-single-raytracer::triangle-in-3d-space
+                 // https://stackoverflow.com/questions/19350792/calculate-normal-of-a-single-triangle-in-3d-space
 
   double Nx = (input.coordinates2.y - input.coordinates1.y) *
                   (input.coordinates3.z - input.coordinates1.z) -
@@ -338,7 +200,7 @@ raytracer::Vector3D give_the_normal_of_a_triangle(
               (input.coordinates2.y - input.coordinates1.y) *
                   (input.coordinates3.x - input.coordinates1.x);
 
-  raytracer::Vector3D to_be_returned;
+  Vector3D to_be_returned;
   to_be_returned.x = Nx;
   to_be_returned.y = Ny;
   to_be_returned.z = Nz;
@@ -346,39 +208,41 @@ raytracer::Vector3D give_the_normal_of_a_triangle(
   return to_be_returned;
 }
 
-raytracer::Vector3D copy_given3d(raytracer::Vector3D a) {
-  raytracer::Vector3D h;
+Vector3D copy_given3d(Vector3D a) {
+  Vector3D h;
   h.x = a.x;
   h.y = a.y;
   h.z = a.z;
   return h;
 }
 
-raytracer::Vector3D vec3_sub(raytracer::Vector3D a, raytracer::Vector3D b);
-raytracer::Vector3D vec3_sub(raytracer::Vector3D a, raytracer::Vector3D b) {
-  raytracer::Vector3D result = {a.x - b.x, a.y - b.y, a.z - b.z};
+Vector3D vec3_sub(Vector3D a, Vector3D b);
+Vector3D vec3_sub(Vector3D a, Vector3D b) {
+  Vector3D result = {a.x - b.x, a.y - b.y, a.z - b.z};
   return result;
 }
-raytracer::Vector3D cross_p(raytracer::Vector3D a, raytracer::Vector3D b) {
-  raytracer::Vector3D result = {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z,
-                                a.x * b.y - a.y * b.x};
+Vector3D cross_p(Vector3D a, Vector3D b);
+Vector3D cross_p(Vector3D a, Vector3D b) {
+  Vector3D result = {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z,
+                     a.x * b.y - a.y * b.x};
   return result;
 }
-
-double dot_product(raytracer::Vector3D a, raytracer::Vector3D b) {
+double dot_product(Vector3D a, Vector3D b);
+double dot_product(Vector3D a, Vector3D b) {
   return a.x * b.x + a.y * b.y + a.z * b.z;
 }
+bool does_triangle_and_ray_intersect_correctly(ray R, ray_tracer::triangle tri);
 bool does_triangle_and_ray_intersect_correctly(
-    raytracer::ray R,
-    raytracer::triangle
+    ray R,
+    ray_tracer::triangle
         tri) { // source is //
-               // https://stackoverflow.com/questions/42740765/intersection-between-line-and-raytracer::triangle-in-3d
+               // https://stackoverflow.com/questions/42740765/intersection-between-line-and-triangle-in-3d
   double t;
   double u;
   double v;
-  raytracer::Vector3D N;
-  raytracer::Vector3D E1 = vec3_sub(tri.coordinates2, tri.coordinates1);
-  raytracer::Vector3D E2 = vec3_sub(tri.coordinates3, tri.coordinates1);
+  Vector3D N;
+  Vector3D E1 = vec3_sub(tri.coordinates2, tri.coordinates1);
+  Vector3D E2 = vec3_sub(tri.coordinates3, tri.coordinates1);
 
   // printf(" Nx: %f \n", R.ray_current_coordinates.x);
   // printf(" Ny %f \n", R.ray_current_coordinates.y);
@@ -389,9 +253,8 @@ bool does_triangle_and_ray_intersect_correctly(
   if (det < 1e-6)
     return false;
   double invdet = 1.0 / det;
-  raytracer::Vector3D AO =
-      vec3_sub(R.ray_current_coordinates, tri.coordinates1);
-  raytracer::Vector3D DAO = cross_p(AO, R.ray_direction);
+  Vector3D AO = vec3_sub(R.ray_current_coordinates, tri.coordinates1);
+  Vector3D DAO = cross_p(AO, R.ray_direction);
   u = dot_product(E2, DAO) * invdet;
   v = -dot_product(E1, DAO) * invdet;
   t = dot_product(AO, N) * invdet;
@@ -399,10 +262,11 @@ bool does_triangle_and_ray_intersect_correctly(
   // <= 1.0));
   return (t >= 0 && u >= 0 && v >= 0 && (u + v) <= 1.0);
 }
-raytracer::Vector3D intersectLinePlane(raytracer::Vector3D P0,
-                                       raytracer::Vector3D v, double A,
-                                       double B, double C, double D) {
-  raytracer::Vector3D intersection;
+Vector3D intersectLinePlane(Vector3D P0, Vector3D v, double A, double B,
+                            double C, double D);
+Vector3D intersectLinePlane(Vector3D P0, Vector3D v, double A, double B,
+                            double C, double D) {
+  Vector3D intersection;
   double t =
       (-D - A * P0.x - B * P0.y - C * P0.z) / (A * v.x + B * v.y + C * v.z);
   intersection.x = P0.x + t * v.x;
@@ -410,25 +274,27 @@ raytracer::Vector3D intersectLinePlane(raytracer::Vector3D P0,
   intersection.z = P0.z + t * v.z;
   return intersection;
 }
-double distanceBetweenPoints(raytracer::Vector3D p1, raytracer::Vector3D p2);
-double distanceBetweenPoints(raytracer::Vector3D p1, raytracer::Vector3D p2) {
+double distanceBetweenPoints(Vector3D p1, Vector3D p2);
+double distanceBetweenPoints(Vector3D p1, Vector3D p2) {
   double dx = p2.x - p1.x;
   double dy = p2.y - p1.y;
   double dz = p2.z - p1.z;
   return sqrt(dx * dx + dy * dy + dz * dz);
 }
 
-double magnitude(raytracer::Vector3D v);
-double magnitude(raytracer::Vector3D v) {
+double magnitude(Vector3D v);
+double magnitude(Vector3D v) {
   return sqrt((float)(v.x * v.x + v.y * v.y + v.z * v.z));
 }
 
-double compute_distance_with_a_triangle_and_ray(raytracer::ray R,
-                                                raytracer::triangle tri) {
-  raytracer::Vector3D normal = give_the_normal_of_a_triangle(tri);
+double compute_distance_with_a_triangle_and_ray(ray R,
+                                                ray_tracer::triangle tri);
+double compute_distance_with_a_triangle_and_ray(ray R,
+                                                ray_tracer::triangle tri) {
+  Vector3D normal = give_the_normal_of_a_triangle(tri);
   double D = -(normal.x * tri.coordinates1.x + normal.y * tri.coordinates1.y +
                normal.z * tri.coordinates1.z);
-  raytracer::Vector3D intersection =
+  Vector3D intersection =
       intersectLinePlane(R.ray_current_coordinates, R.ray_direction, normal.x,
                          normal.y, normal.z, D);
   double distance =
@@ -436,9 +302,9 @@ double compute_distance_with_a_triangle_and_ray(raytracer::ray R,
   double mag = magnitude(R.ray_direction);
   return distance * mag;
 }
-raytracer::Vector3D vectorFromPoints(raytracer::Vector3D A,
-                                     raytracer::Vector3D B) {
-  raytracer::Vector3D result;
+Vector3D vectorFromPoints(Vector3D A, Vector3D B);
+Vector3D vectorFromPoints(Vector3D A, Vector3D B) {
+  Vector3D result;
   result.x = B.x - A.x;
   result.y = B.y - A.y;
   result.z = B.z - A.z;
@@ -446,12 +312,12 @@ raytracer::Vector3D vectorFromPoints(raytracer::Vector3D A,
 }
 
 // Function to calculate the minimum distance between a point and a line in 3D
-double minimumDistance(raytracer::Vector3D A, raytracer::Vector3D d,
-                       raytracer::Vector3D P) {
+double minimumDistance(Vector3D A, Vector3D d, Vector3D P);
+double minimumDistance(Vector3D A, Vector3D d, Vector3D P) {
 
-  raytracer::Vector3D lin = vectorFromPoints(A, P);
+  Vector3D lin = vectorFromPoints(A, P);
 
-  raytracer::Vector3D lin_cross_d = cross_p(lin, d);
+  Vector3D lin_cross_d = cross_p(lin, d);
 
   double magnitude_lin_cross_d = magnitude(lin_cross_d);
   double magnitude_d = magnitude(d);
@@ -466,23 +332,22 @@ double minimumDistance(raytracer::Vector3D A, raytracer::Vector3D d,
   return distance;
 }
 
-double
-compute_distance_with_a_ray_and_a_point(raytracer::ray current_ray,
-                                        raytracer::Vector3D light_position) {
+double compute_distance_with_a_ray_and_a_point(ray current_ray,
+                                               Vector3D light_position);
+double compute_distance_with_a_ray_and_a_point(ray current_ray,
+                                               Vector3D light_position) {
 
   return minimumDistance(current_ray.ray_current_coordinates,
                          current_ray.ray_direction, light_position);
 }
-raytracer::Vector3D
-find_intersection_of_a_triangle_with_a_ray(raytracer::ray R,
-                                           raytracer::triangle tri);
-raytracer::Vector3D find_intersection_of_a_triangle_with_a_ray(
-    raytracer::ray R,
-    raytracer::triangle tri) { // written with the help of ChatGPT
+Vector3D find_intersection_of_a_triangle_with_a_ray(ray R,
+                                                    ray_tracer::triangle tri);
+Vector3D find_intersection_of_a_triangle_with_a_ray(
+    ray R, ray_tracer::triangle tri) { // written with the help of ChatGPT
   double x0 = R.ray_current_coordinates.x, y0 = R.ray_current_coordinates.y,
          z0 = R.ray_current_coordinates.z;
   double dx = R.ray_direction.x, dy = R.ray_direction.y, dz = R.ray_direction.z;
-  raytracer::Vector3D normal = give_the_normal_of_a_triangle(tri);
+  Vector3D normal = give_the_normal_of_a_triangle(tri);
   double D1 = -(normal.x * tri.coordinates1.x + normal.y * tri.coordinates1.y +
                 normal.z * tri.coordinates1.z);
   double A = normal.x, B = normal.y, C = normal.z, D = D1;
@@ -492,7 +357,7 @@ raytracer::Vector3D find_intersection_of_a_triangle_with_a_ray(
   double numerator = -(A * x0 + B * y0 + C * z0 + D);
   double t = numerator / denominator;
 
-  raytracer::Vector3D intersection;
+  Vector3D intersection;
 
   intersection.x = x0 + t * dx;
   intersection.y = y0 + t * dy;
@@ -500,8 +365,8 @@ raytracer::Vector3D find_intersection_of_a_triangle_with_a_ray(
 
   return intersection;
 }
-Vector3D give_specular_direction(ray current_ray, raytracer::triangle tri);
-Vector3D give_specular_direction(ray current_ray, raytracer::triangle tri) {
+Vector3D give_specular_direction(ray current_ray, ray_tracer::triangle tri);
+Vector3D give_specular_direction(ray current_ray, ray_tracer::triangle tri) {
   Vector3D planeNormal = give_the_normal_of_a_triangle(tri);
   Vector3D incidentRay = current_ray.ray_direction;
 
@@ -551,50 +416,46 @@ Vector3D random_direction(Vector3D normal1, uint *seed) {
   return result;
 }
 
-Vector3D give_diffusive_direction(ray current_ray, raytracer::triangle tri,
+Vector3D give_diffusive_direction(ray current_ray, ray_tracer::triangle tri,
                                   uint *seed);
-Vector3D give_diffusive_direction(ray current_ray, raytracer::triangle tri,
+Vector3D give_diffusive_direction(ray current_ray, ray_tracer::triangle tri,
                                   uint *seed) {
   Vector3D planeNormal = give_the_normal_of_a_triangle(tri);
 
   return random_direction(planeNormal, seed);
 }
 
-raytracer::Vector2D randomPointInRange(raytracer::Vector2D vector, double r,
-                                       uint *seed);
-raytracer::Vector2D randomPointInRange(raytracer::Vector2D vector, double r,
-                                       uint *seed) {
+Vector2D randomPointInRange(Vector2D vector, double r, uint *seed);
+Vector2D randomPointInRange(Vector2D vector, double r, uint *seed) {
 
   double angle = 2 * M_PI * random_double_between_0_1_giver(seed);
 
   double distance = r + (random_double_between_0_1_giver(seed) * r);
 
-  raytracer::Vector2D point;
+  Vector2D point;
   point.x = vector.x + distance * cos((float)angle);
   point.y = vector.y + distance * sin((float)angle);
 
   return point;
 }
-void array_element_remover(raytracer::Vector2D *array, int index,
+void array_element_remover(Vector2D *array, int index,
                            int array_total_number_of_elemets);
-void array_element_remover(raytracer::Vector2D *array, int index,
+void array_element_remover(Vector2D *array, int index,
                            int array_total_number_of_elemets) {
   for (int a = 0; a < array_total_number_of_elemets - index - 1; a++) {
     array[index + a] = array[index + a + 1];
   }
 }
-void populate_the_random_k_points(raytracer::Vector2D given, double min,
-                                  raytracer::Vector2D *to_be_populated,
-                                  uint *seed);
-void populate_the_random_k_points(raytracer::Vector2D given, double min,
-                                  raytracer::Vector2D *to_be_populated,
-                                  uint *seed) {
+void populate_the_random_k_points(Vector2D given, double min,
+                                  Vector2D *to_be_populated, uint *seed);
+void populate_the_random_k_points(Vector2D given, double min,
+                                  Vector2D *to_be_populated, uint *seed) {
   for (int a = 0; a < 30; a++) {
     to_be_populated[a] = randomPointInRange(given, min, seed);
   }
 }
-double distance_between(raytracer::Vector2D v1, raytracer::Vector2D v2);
-double distance_between(raytracer::Vector2D v1, raytracer::Vector2D v2) {
+double distance_between(Vector2D v1, Vector2D v2);
+double distance_between(Vector2D v1, Vector2D v2) {
   return (double)sqrt(
       (float)((v1.x - v2.x) * (v1.x - v2.x) + (v1.y - v2.y) * (v1.y - v2.y)));
 }
@@ -604,25 +465,25 @@ int randomIntInRange(int n, int m, uint *seed) {
   return n + (int)(random_double_between_0_1_giver(seed) * (double)(m - n - 1));
 }
 
-int fitness_checker(raytracer::Vector2D current_point,
-                    raytracer::Vector2D *location_array, int rows, int cols,
-                    int background_array[50][50], double length, double width,
-                    int m, int n, double r, double tek_kare_uzunluk);
-int fitness_checker(raytracer::Vector2D current_point,
-                    raytracer::Vector2D *location_array, int rows, int cols,
-                    int background_array[50][50], double length, double width,
-                    int m, int n, double r, double tek_kare_uzunluk) {
+int fitness_checker(Vector2D current_point, Vector2D *location_array, int rows,
+                    int cols, int background_array[50][50], double length,
+                    double width, int m, int n, double r,
+                    double tek_kare_uzunluk);
+int fitness_checker(Vector2D current_point, Vector2D *location_array, int rows,
+                    int cols, int background_array[50][50], double length,
+                    double width, int m, int n, double r,
+                    double tek_kare_uzunluk) {
   if (current_point.x > 0 && current_point.x < length && current_point.y > 0 &&
       current_point.y < width) {
     int x0 = my_floor(current_point.x / tek_kare_uzunluk);
 
     int y0 = my_floor(current_point.y / tek_kare_uzunluk);
 
-    int i0 = fmax(y0 - 1, 0);
-    int i1 = fmin(y0 + 1, m - 1);
+    int i0 = fmax(y0 - 1, 0.0);
+    int i1 = fmin(y0 + 1, (float)(m - 1));
 
-    int j0 = fmax(x0 - 1, 0);
-    int j1 = fmin(x0 + 1, n - 1);
+    int j0 = fmax(x0 - 1, 0.0);
+    int j1 = fmin(x0 + 1, (float)(n - 1));
 
     for (int i = i0; i <= i1; i++) {
       for (int j = j0; j <= j1; j++) {
@@ -650,18 +511,15 @@ int fitness_checker(raytracer::Vector2D current_point,
   return 1;
 }
 
-raytracer::Vector2D_array random_points_giver(double width, double length,
-                                              double minimum_distance,
-                                              uint *seed);
-raytracer::Vector2D_array random_points_giver(double width, double length,
-                                              double minimum_distance,
-                                              uint *seed) {
+Vector2D_array random_points_giver(double width, double length,
+                                   double minimum_distance, uint *seed);
+Vector2D_array random_points_giver(double width, double length,
+                                   double minimum_distance, uint *seed) {
 
   double tek_kare_uzunluk = minimum_distance / sqrt((float)2);
   int n = my_ceil(length / tek_kare_uzunluk);
   int m = my_ceil(width / tek_kare_uzunluk);
 
-  // int background_array[m][n];
   int background_array[50][50];
 
   for (int i = 0; i < m; i++) {
@@ -669,7 +527,7 @@ raytracer::Vector2D_array random_points_giver(double width, double length,
       background_array[i][j] = -1;
     }
   }
-  raytracer::Vector2D initial_random_vector;
+  Vector2D initial_random_vector;
   initial_random_vector.x = random_double_between_0_1_giver(seed) * length;
   initial_random_vector.y = random_double_between_0_1_giver(seed) * width;
 
@@ -682,11 +540,11 @@ raytracer::Vector2D_array random_points_giver(double width, double length,
   int active_array_current_index = 0;
   int location_array_index = 0;
 
-  // raytracer::Vector2D active_array[n*m];
-  // raytracer::Vector2D location_array[n*m];
+  // Vector2D active_array[n*m];
+  // Vector2D location_array[n*m];
 
-  raytracer::Vector2D active_array[50 * 50];
-  raytracer::Vector2D location_array[50 * 50];
+  Vector2D active_array[50 * 50];
+  Vector2D location_array[50 * 50];
 
   active_array[active_array_current_index] = initial_random_vector;
   location_array[location_array_index] = initial_random_vector;
@@ -695,14 +553,14 @@ raytracer::Vector2D_array random_points_giver(double width, double length,
 
   while (active_array_current_index > 0) {
 
-    raytracer::Vector2D random_k_points[30];
+    Vector2D random_k_points[30];
     int j = randomIntInRange(0, active_array_current_index, seed);
 
     populate_the_random_k_points(active_array[j], minimum_distance,
                                  random_k_points, seed);
     for (int i = 0; i < 30; i++) {
 
-      raytracer::Vector2D current_point = random_k_points[i];
+      Vector2D current_point = random_k_points[i];
 
       int j = fitness_checker(current_point, location_array, m, n,
                               background_array, length, width, m, n,
@@ -729,18 +587,18 @@ raytracer::Vector2D_array random_points_giver(double width, double length,
       }
     }
   }
-  raytracer::Vector2D_array to_be_returned;
+  Vector2D_array to_be_returned;
   to_be_returned.array = location_array;
   to_be_returned.number_of_elements = location_array_index;
   return to_be_returned;
 }
-raytracer::Vector3D_array
-place_it_to_new_location(raytracer::Vector2D_array *input,
-                         double new_x_coorinate, double new_y_coordiante);
-raytracer::Vector3D_array
-place_it_to_new_location(raytracer::Vector2D_array *input,
-                         double new_x_coorinate, double new_y_coordiante) {
-  raytracer::Vector3D_array to_be_returned;
+Vector3D_array place_it_to_new_location(Vector2D_array *input,
+                                        double new_x_coorinate,
+                                        double new_y_coordiante);
+Vector3D_array place_it_to_new_location(Vector2D_array *input,
+                                        double new_x_coorinate,
+                                        double new_y_coordiante) {
+  Vector3D_array to_be_returned;
   memset(to_be_returned.array, 0, sizeof(Vector3D));
   to_be_returned.number_of_elements = input->number_of_elements;
   for (int i = 0; i < input->number_of_elements; i++) {
@@ -753,7 +611,7 @@ place_it_to_new_location(raytracer::Vector2D_array *input,
   return to_be_returned;
 }
 
-// below are the functions to convert a spectrum a an raytracer::RGB value
+// below are the functions to convert a spectrum a an rgb value
 
 typedef struct {
   double wavelength;
@@ -836,8 +694,8 @@ void wavelength_to_xyz(
   }
 }
 
-// the following 4 functions ro convert a spectrum to an raytracer::RGB value
-// are taken from ChatGPT
+// the following 4 functions ro convert a spectrum to an RGB value are taken
+// from ChatGPT
 void spectral_to_xyz(double *spd, double *wavelengths, int length, double *X,
                      double *Y, double *Z);
 void spectral_to_xyz(double *spd, double *wavelengths, int length, double *X,
@@ -875,9 +733,9 @@ void spectral_to_xyz(double *spd, double *wavelengths, int length, double *X,
     }
   }
 }
-void xyz_to_RGB(double X, double Y, double Z, double *R, double *G, double *B);
-void xyz_to_RGB(double X, double Y, double Z, double *R, double *G, double *B) {
-  // Define the transformation matrix from XYZ to linear sraytracer::RGB
+void xyz_to_rgb(double X, double Y, double Z, double *R, double *G, double *B);
+void xyz_to_rgb(double X, double Y, double Z, double *R, double *G, double *B) {
+  // Define the transformation matrix from XYZ to linear sRGB
 
   double M[3][3] = {{3.2406, -1.5372, -0.4986},
                     {-0.9689, 1.8758, 0.0415},
@@ -892,43 +750,43 @@ double gamma_correct(double value) {
   if (value <= 0.0031308) {
     return 12.92 * value;
   } else {
-    return 1.055 * pow((float)value, 1 / 2.4) - 0.055;
+    return 1.055 * pow((float)value, (float)(1 / 2.4)) - 0.055;
   }
 }
-void spectral_to_RGB(double *spd, double *wavelengths, int length, int *R,
+void spectral_to_rgb(double *spd, double *wavelengths, int length, int *R,
                      int *G, int *B);
-void spectral_to_RGB(double *spd, double *wavelengths, int length, int *R,
+void spectral_to_rgb(double *spd, double *wavelengths, int length, int *R,
                      int *G, int *B) {
   // Convert the spectral distribution to XYZ
   double X, Y, Z;
   spectral_to_xyz(spd, wavelengths, length, &X, &Y, &Z);
 
-  // Convert XYZ to linear raytracer::RGB
-  double RGB_linear[3];
-  xyz_to_RGB(X, Y, Z, &RGB_linear[0], &RGB_linear[1], &RGB_linear[2]);
+  // Convert XYZ to linear RGB
+  double rgb_linear[3];
+  xyz_to_rgb(X, Y, Z, &rgb_linear[0], &rgb_linear[1], &rgb_linear[2]);
 
   // Apply gamma correction
-  double RGB_corrected[3];
+  double rgb_corrected[3];
   for (int i = 0; i < 3; ++i) {
-    RGB_corrected[i] = gamma_correct(RGB_linear[i]);
+    rgb_corrected[i] = gamma_correct(rgb_linear[i]);
   }
 
   // Clamp and scale to [0, 255]
 
-  *R = (int)(fmax((float)0.0, fmin((float)1.0, RGB_corrected[0])) * 255);
-  *G = (int)(fmax((float)0.0, fmin((float)1.0, RGB_corrected[1])) * 255);
-  *B = (int)(fmax((float)0.0, fmin((float)1.0, RGB_corrected[2])) * 255);
+  *R = (int)(fmax((float)0.0, fmin((float)1.0, (float)rgb_corrected[0])) * 255);
+  *G = (int)(fmax((float)0.0, fmin((float)1.0, (float)rgb_corrected[1])) * 255);
+  *B = (int)(fmax((float)0.0, fmin((float)1.0, (float)rgb_corrected[2])) * 255);
 }
 
 // ray tracing computations are below
-raytracer::spectrum_of_light
-compute_the_ray(ray current_ray, raytracer::surface_array *all_surfaces,
-                raytracer::triangle_array *all_faces, Vector3D light_position,
-                double light_radius, uint *seed, int max_recursion);
-raytracer::spectrum_of_light
-compute_the_ray(ray current_ray, raytracer::surface_array *all_surfaces,
-                raytracer::triangle_array *all_faces, Vector3D light_position,
-                double light_radius, uint *seed, int max_recursion) {
+spectrum_of_light compute_the_ray(ray current_ray, surface_array *all_surfaces,
+                                  triangle_array *all_faces,
+                                  Vector3D light_position, double light_radius,
+                                  uint *seed, int max_recursion);
+spectrum_of_light compute_the_ray(ray current_ray, surface_array *all_surfaces,
+                                  triangle_array *all_faces,
+                                  Vector3D light_position, double light_radius,
+                                  uint *seed, int max_recursion) {
 
   if (current_ray.recursion_index + 1 > max_recursion) {
 
@@ -963,7 +821,7 @@ compute_the_ray(ray current_ray, raytracer::surface_array *all_surfaces,
   }
 
   if (triangle_index == -1) {
-    raytracer::spectrum_of_light zero_one;
+    spectrum_of_light zero_one;
     zero_one.number_of_elements = (700 - 380) / 5 + 1;
     for (int y = 0; y < zero_one.number_of_elements; y++) {
       zero_one.spectrum[y] = 0;
@@ -972,14 +830,14 @@ compute_the_ray(ray current_ray, raytracer::surface_array *all_surfaces,
   }
 
   ray new_ray_specular;
-  raytracer::spectrum_of_light spectrum_of_current_ray;
+  spectrum_of_light spectrum_of_current_ray;
   spectrum_of_current_ray.number_of_elements = (700 - 380) / 5 + 1;
 
   int surface_index = all_faces->all_triangles[triangle_index].surface_number;
 
   for (int o = 0; o < spectrum_of_current_ray.number_of_elements; o++) {
     double a1 = current_ray.ray_spectrum.spectrum[o];
-    raytracer::surface a2 = all_surfaces->surface_array[surface_index];
+    surface a2 = all_surfaces->surface_array[surface_index];
     double a3 = a2.surface_spectrum.spectrum[o];
     double a4 =
         (1 -
@@ -990,12 +848,12 @@ compute_the_ray(ray current_ray, raytracer::surface_array *all_surfaces,
   new_ray_specular.ray_spectrum = spectrum_of_current_ray;
 
   ray new_ray_diffusion;
-  raytracer::spectrum_of_light spectrum_of_current_ray2;
+  spectrum_of_light spectrum_of_current_ray2;
   spectrum_of_current_ray2.number_of_elements = (700 - 380) / 5 + 1;
 
   for (int o = 0; o < spectrum_of_current_ray2.number_of_elements; o++) {
     double a1 = current_ray.ray_spectrum.spectrum[o];
-    raytracer::surface a2 = all_surfaces->surface_array[surface_index];
+    surface a2 = all_surfaces->surface_array[surface_index];
     double a3 = a2.surface_spectrum.spectrum[o];
     double a4 =
         ((all_surfaces->surface_array[surface_index]).diffusion_coefficient);
@@ -1019,10 +877,10 @@ compute_the_ray(ray current_ray, raytracer::surface_array *all_surfaces,
   new_ray_specular.recursion_index = current_ray.recursion_index + 1;
   new_ray_diffusion.recursion_index = current_ray.recursion_index + 1;
 
-  raytracer::spectrum_of_light specular_spectrum =
+  spectrum_of_light specular_spectrum =
       compute_the_ray(new_ray_specular, all_surfaces, all_faces, light_position,
                       light_radius, seed, max_recursion);
-  raytracer::spectrum_of_light diffusive_spectrum =
+  spectrum_of_light diffusive_spectrum =
       compute_the_ray(new_ray_diffusion, all_surfaces, all_faces,
                       light_position, light_radius, seed, max_recursion);
 
@@ -1031,23 +889,21 @@ compute_the_ray(ray current_ray, raytracer::surface_array *all_surfaces,
   return specular_spectrum;
 }
 
-raytracer::RGB trace(int which_pixel_x_coord, int which_pixel_y_coord,
-                     double camara_plane_x_width, double camera_plane_y_width,
-                     int number_of_x_pixels, int number_of_y_pixels,
-                     int random_number_generator_seed, double minimum_distance,
-                     raytracer::surface_array all_surfaces,
-                     raytracer::triangle_array all_faces,
-                     Vector3D light_position, double light_radius,
-                     int max_recursion) {
+RGB trace(int which_pixel_x_coord, int which_pixel_y_coord,
+          double camara_plane_x_width, double camera_plane_y_width,
+          int number_of_x_pixels, int number_of_y_pixels,
+          int random_number_generator_seed, double minimum_distance,
+          surface_array *all_surfaces, triangle_array *all_faces,
+          Vector3D light_position, double light_radius, int max_recursion) {
   uint our_random_number = (uint)random_number_generator_seed;
 
-  raytracer::spectrum_of_light resultant_spectrum;
+  spectrum_of_light resultant_spectrum;
   resultant_spectrum.number_of_elements = (700 - 380) / 5 + 1;
   for (int t = 0; t < resultant_spectrum.number_of_elements; t++) {
     resultant_spectrum.spectrum[t] = 0.0;
   }
 
-  raytracer::Vector2D_array to_be_returned =
+  Vector2D_array to_be_returned =
       random_points_giver(camera_plane_y_width / ((double)(number_of_y_pixels)),
                           camara_plane_x_width / ((double)(number_of_x_pixels)),
                           minimum_distance, &our_random_number);
@@ -1055,7 +911,7 @@ raytracer::RGB trace(int which_pixel_x_coord, int which_pixel_y_coord,
   // printf("The integer final final is: %d\n",
   // to_be_returned.number_of_elements);
 
-  raytracer::Vector3D_array final_plane =
+  Vector3D_array final_plane =
       place_it_to_new_location(&to_be_returned,
                                which_pixel_x_coord * camara_plane_x_width /
                                        ((double)(number_of_x_pixels)) -
@@ -1068,7 +924,7 @@ raytracer::RGB trace(int which_pixel_x_coord, int which_pixel_y_coord,
 
     ray current_ray;
     current_ray.recursion_index = 0;
-    raytracer::spectrum_of_light spectrum_of_current_ray;
+    spectrum_of_light spectrum_of_current_ray;
     spectrum_of_current_ray.number_of_elements = (700 - 380) / 5 + 1;
     // initialize the white light
 
@@ -1080,8 +936,8 @@ raytracer::RGB trace(int which_pixel_x_coord, int which_pixel_y_coord,
         final_plane.array[i]); // The COP is assumed to be at the origin
     current_ray.ray_current_coordinates = copy_given3d(final_plane.array[i]);
 
-    raytracer::spectrum_of_light the_new_spectrum =
-        compute_the_ray(current_ray, &all_surfaces, &all_faces, light_position,
+    spectrum_of_light the_new_spectrum =
+        compute_the_ray(current_ray, all_surfaces, all_faces, light_position,
                         light_radius, &our_random_number, max_recursion);
 
     add_second_spectrum_to_first_one(&resultant_spectrum, the_new_spectrum);
@@ -1091,8 +947,7 @@ raytracer::RGB trace(int which_pixel_x_coord, int which_pixel_y_coord,
     resultant_spectrum.spectrum[j] /= (double)final_plane.number_of_elements;
   }
 
-  // code to convert the final resultant light spectrum into raytracer::RGB
-  // values
+  // code to convert the final resultant light spectrum into rgb values
   int length = (int)((700 - 380) / 5 + 1);
   double wavelengths[length];
   double spd[length];
@@ -1108,249 +963,229 @@ raytracer::RGB trace(int which_pixel_x_coord, int which_pixel_y_coord,
 
   int R, G, B;
 
-  spectral_to_RGB(spd, wavelengths, length, &R, &G, &B);
-  // printf("raytracer::RGB: (%d, %d, %d)\n", R, G, B);
+  spectral_to_rgb(spd, wavelengths, length, &R, &G, &B);
+  // printf("RGB: (%d, %d, %d)\n", R, G, B);
 
-  raytracer::RGB colour;
+  RGB colour;
   colour.R = (uchar)R;
   colour.G = (uchar)G;
   colour.B = (uchar)B;
 
   return colour;
 }
+///-------------------------------------------------------------
+// CHATGPT GENERATED CODE
+void RGBtoXYZ(int R, int G, int B, double *X, double *Y, double *Z) {
+  double r = R / 255.0; // Normalize the RGB values to [0, 1]
+  double g = G / 255.0;
+  double b = B / 255.0;
 
-#define VEC3TOFLOAT4ONEIDX(vec3, float4, i) float4.i = vec3.i
-#define VEC3TOFLOAT4(vec3, float4)                                             \
-  VEC3TOFLOAT4ONEIDX(vec3, float4, x);                                         \
-  VEC3TOFLOAT4ONEIDX(vec3, float4, y);                                         \
-  VEC3TOFLOAT4ONEIDX(vec3, float4, z);
+  // Convert to linear RGB
+  r = (r > 0.04045) ? pow((r + 0.055) / 1.055, 2.4) : r / 12.92;
+  g = (g > 0.04045) ? pow((g + 0.055) / 1.055, 2.4) : g / 12.92;
+  b = (b > 0.04045) ? pow((b + 0.055) / 1.055, 2.4) : b / 12.92;
 
-#define CHECK_ERROR(x) CL_RUN3(;)
+  // Assume sRGB
+  *X = r * 0.4124564 + g * 0.3575761 + b * 0.1804375;
+  *Y = r * 0.2126729 + g * 0.7151522 + b * 0.0721750;
+  *Z = r * 0.0193339 + g * 0.1191920 + b * 0.9503041;
+}
+void XYZToSpectrum(double X, double Y, double Z, spectrum_of_light *spec) {
+  // Constants for the Gaussian centers for R, G, B (just an example)
+  const double lambdaR = 560; // Peak for Red
+  const double lambdaG = 530; // Peak for Green
+  const double lambdaB = 460; // Peak for Blue
 
-#define RANDOM_POINTS_GIVER_ARRAY_ONE_DIM (2)
-#define RANDOM_POINTS_GIVER_ARRAY_LENGTH                                       \
-  (RANDOM_POINTS_GIVER_ARRAY_ONE_DIM * RANDOM_POINTS_GIVER_ARRAY_ONE_DIM)
+  const double sigma = 20; // Width of the Gaussian
 
-int main() {
+  for (int i = 0; i < spec->number_of_elements; i++) {
+    double lambda = 380 + i * 5;
+    // Compute the Gaussian contributions for each component
+    double r = exp(-0.5 * pow((lambda - lambdaR) / sigma, 2));
+    double g = exp(-0.5 * pow((lambda - lambdaG) / sigma, 2));
+    double b = exp(-0.5 * pow((lambda - lambdaB) / sigma, 2));
 
-  cl_int err;
-  cl_device_id device = create_device();
+    // Combine the Gaussians weighted by the XYZ components (simplified model)
+    spec->spectrum[i] = r * X + g * Y + b * Z;
+  }
+}
 
-  cl_context context = CL_RUN(clCreateContext, NULL, 1, &device, NULL, NULL);
+///--------------------------------------------------------------
 
-  cl_program program = build_program(context, device, "trace.cl");
+void load_json_model(const std::string filepath, model **modelp,
+                     surface *all_surfaces, int *current_surface_index,
+                     triangle_array *all_triangles, int *current_triangle_index,
+                     mat4 Transform, mat4 Projection) {
+  std::ifstream file2(filepath);
+  std::stringstream buffer;
+  buffer << file2.rdbuf();
+  std::string json2 = buffer.str();
+  file2.close();
 
-  raytracer::surface yellow_surface;
-  raytracer::spectrum_of_light yellow_spectrum;
-  yellow_spectrum.number_of_elements = (int)((700 - 380) / 5 + 1);
-  for (int a = 380; a < 700 + 1; a += 5) {
-    if (a >= 560 && a <= 590) {
-      yellow_spectrum.spectrum[(int)((a - 380) / 5)] = 0.9;
+  serializable_model smodel;
+  smodel.zax_from_json(json2.c_str());
 
-    } else {
-      yellow_spectrum.spectrum[(int)((a - 380) / 5)] = 0.1;
+  std::cout << "Loaded Model " << smodel << std::endl;
+
+  model *new_model = (model *)calloc(1, sizeof(model));
+  model _model = to_model(smodel);
+  new_model->material.diffuse = _model.material.diffuse;
+  new_model->material.shininess = _model.material.shininess;
+
+  for (auto t : _model.triangles) {
+    new_model->triangles.push_back(t);
+  }
+
+  all_surfaces[*current_surface_index].diffusion_coefficient =
+      1.0 / (1.0 + (new_model->material.shininess / 50.0));
+  printf("coeff: %.2f \n",all_surfaces[*current_surface_index].diffusion_coefficient);
+  all_surfaces[*current_surface_index].surface_spectrum.number_of_elements = 65;
+
+  double xyz_linear[3];
+  RGBtoXYZ(new_model->material.diffuse.x * 255,
+           new_model->material.diffuse.y * 255,
+           new_model->material.diffuse.z * 255, &xyz_linear[0], &xyz_linear[1],
+           &xyz_linear[2]);
+  std::cout << "xyz: " << xyz_linear[0] << " " << xyz_linear[1] << " "
+            << xyz_linear[2] << std::endl;
+  XYZToSpectrum(xyz_linear[0], xyz_linear[1], xyz_linear[2],
+                &(all_surfaces[*current_surface_index].surface_spectrum));
+
+  for (auto t : new_model->triangles) {
+    t.p0 = Projection * Transform * t.p0;
+    t.p1 = Projection * Transform * t.p1;
+    t.p2 = Projection * Transform * t.p2;
+
+    all_triangles->all_triangles[*current_triangle_index].coordinates1.x =
+        t.p0.x;
+    all_triangles->all_triangles[*current_triangle_index].coordinates1.y =
+        t.p0.y;
+    all_triangles->all_triangles[*current_triangle_index].coordinates1.z =
+        t.p0.z;
+
+    all_triangles->all_triangles[*current_triangle_index].coordinates2.x =
+        t.p1.x;
+    all_triangles->all_triangles[*current_triangle_index].coordinates2.y =
+        t.p1.y;
+    all_triangles->all_triangles[*current_triangle_index].coordinates2.z =
+        t.p1.z;
+
+    all_triangles->all_triangles[*current_triangle_index].coordinates3.x =
+        t.p2.x;
+    all_triangles->all_triangles[*current_triangle_index].coordinates3.y =
+        t.p2.y;
+    all_triangles->all_triangles[*current_triangle_index].coordinates3.z =
+        t.p2.z;
+
+    all_triangles->all_triangles[*current_triangle_index].surface_number =
+        *current_surface_index;
+    *current_triangle_index += 1;
+    all_triangles->total_number_of_triangles += 1;
+  }
+  *current_surface_index += 1;
+}
+
+struct thread_data {
+  surface_array *all_surfaces;
+  triangle_array *all_tris;
+  Vector3D light_position;
+  uchar *outc;
+  int thread_index;
+  int thread_count;
+};
+void parallel_trace(surface_array *all_surfaces, triangle_array *all_tris,
+                    Vector3D light_position, uchar *outc, int thread_index,
+                    int thread_count);
+
+void *to_call_pthreads(void *_data) {
+  auto data = (thread_data *)_data;
+  parallel_trace(data->all_surfaces, data->all_tris, data->light_position,
+                 data->outc, data->thread_index, data->thread_count);
+  pthread_exit(NULL);
+}
+
+void parallel_trace(surface_array *all_surfaces, triangle_array *all_tris,
+                    Vector3D light_position, uchar *outc, int thread_index,
+                    int thread_count) {
+  for (int i = 0; i < NUM_PIXELS_X; i++) {
+
+    for (int j = 0; j < NUM_PIXELS_Y; j++) {
+
+      int ij = (j * NUM_PIXELS_X) + i;
+      if (ij % thread_count != thread_index)
+        continue;
+
+      RGB output_colour =
+          trace(i, j, 1, 1, NUM_PIXELS_X, NUM_PIXELS_Y, (int)rand() % RAND_MAX,
+                0.0005, all_surfaces, all_tris, light_position, 2.0, 6);
+      outc[4 * (i * NUM_PIXELS_X + j)] = output_colour.R;
+      outc[4 * (i * NUM_PIXELS_X + j) + 1] = output_colour.G;
+      outc[4 * (i * NUM_PIXELS_X + j) + 2] = output_colour.B;
+      outc[4 * (i * NUM_PIXELS_X + j) + 3] = 255;
     }
   }
-  yellow_surface.diffusion_coefficient = 0.6;
+}
 
-  raytracer::surface_array all_surfaces;
-  yellow_surface.surface_spectrum = yellow_spectrum;
-  all_surfaces.surface_array[0] = yellow_surface;
-
-  raytracer::triangle yellow_triangle;
-  yellow_triangle.surface_number = 0;
-  Vector3D v1;
-  v1.x = -1.0;
-  v1.y = 0.0;
-  v1.z = 3.0;
-  Vector3D v2;
-  v2.x = 0.0;
-  v2.y = 1.0;
-  v2.z = 3.0;
-  Vector3D v3;
-  v3.x = 1.0;
-  v3.y = 0.0;
-  v3.z = 3.0;
-
-  yellow_triangle.coordinates1 = v1;
-  yellow_triangle.coordinates2 = v2;
-  yellow_triangle.coordinates3 = v3;
-
-  raytracer::triangle_array all_tris;
-  all_tris.total_number_of_triangles = 1;
-  all_tris.all_triangles[0] = yellow_triangle;
-
+int main() {
+  surface_array all_surfaces;
+  triangle_array all_tris;
+  all_tris.total_number_of_triangles = 0;
+  int surface_index = 0;
+  int tri_index = 0;
+  model *to_free;
+  load_json_model("../test/bunny.json", &to_free, (all_surfaces.surface_array),
+                  &surface_index, &all_tris, &tri_index,
+                  Translate(0.0, 0.0, 2.0) * RotateY(120) * RotateX(180), identity());
   Vector3D light_position;
   light_position.x = 0.0;
   light_position.y = 0.0;
   light_position.z = 0.0;
 
-  /**
-  __kernel void trace(
-    double camara_plane_x_width, double camera_plane_y_width,
-    int number_of_x_pixels, int number_of_y_pixels,
-    int random_number_generator_seed, double minimum_distance,
-    __global double *all_surfaces_spectrums, __global double
-  *all_surfaces_coeffs, int surface_count,
-    __global float4 *all_triangles_coords, __global int *all_triangles_surfaces,
-  int triangle_count, float4 light_position, double light_radius, int
-  max_recursion, __global float4 *out_data)
-  */
+  uchar *outc = (uchar *)calloc(OUT_BUFFER_LEN * 4, sizeof(uchar));
 
-  int num_surfaces = 4; // I guess hard coded 50?
-  int num_triangles = all_tris.total_number_of_triangles;
-  printf("NUM TRIANGLES: %d\n", num_triangles);
-  cl_float *all_surfaces_spectrums;
-  cl_float *all_surfaces_coeffs;
-  cl_float4 *all_triangles_coords;
-  cl_int *all_triangles_surfaces;
-
-  all_surfaces_spectrums =
-      (cl_float *)calloc(num_surfaces, sizeof(cl_float) * SPECTRUM_SIZE);
-  all_surfaces_coeffs = (cl_float *)calloc(num_surfaces, sizeof(cl_float));
-  all_triangles_coords =
-      (cl_float4 *)calloc(num_triangles, sizeof(cl_float4) * 3);
-  all_triangles_surfaces = (cl_int *)calloc(num_triangles, sizeof(cl_int));
-
-  cl_float4 *outc = (cl_float4 *)calloc(OUT_BUFFER_LEN, sizeof(cl_float4));
-
-  // put all the data in
-
-  for (int i = 0; i < all_tris.total_number_of_triangles; i++) {
-    auto tri = all_tris.all_triangles + i;
-    VEC3TOFLOAT4(tri->coordinates1, all_triangles_coords[(i * 3) + 0]);
-    VEC3TOFLOAT4(tri->coordinates2, all_triangles_coords[(i * 3) + 1]);
-    VEC3TOFLOAT4(tri->coordinates3, all_triangles_coords[(i * 3) + 2]);
-    all_triangles_surfaces[i] = tri->surface_number;
-  }
-
-  for (int i = 0; i < num_surfaces; i++) {
-    auto surface = all_surfaces.surface_array + i;
-    for (int j = 0; j < SPECTRUM_SIZE; j++) {
-      all_surfaces_spectrums[(i * SPECTRUM_SIZE) + j] =
-          surface->surface_spectrum.spectrum[j];
-    }
-    all_surfaces_coeffs[i] = surface->diffusion_coefficient;
-  }
-
-  cl_command_queue queue = CL_RUN(clCreateCommandQueue, context, device, 0);
-  cl_kernel kernel = CL_RUN(clCreateKernel, program, "trace");
-
-  double cam_w = 1.0;
-  double cam_h = 1.0;
-
-  int num_pixels[] = {NUM_PIXELS_X, NUM_PIXELS_Y};
-
-  int seed = 42;
-
-  double min_distance = 0.0005;
-
-  double light_radius = 2.0;
-
-  int max_recursion = 6;
-
-  cl_float4 light_pos4;
-
-  VEC3TOFLOAT4(light_position, light_pos4);
-
-  CL_RUN3(cl_mem d_all_surfaces_spectrums =
-              clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                             num_surfaces * SPECTRUM_SIZE * sizeof(cl_float),
-                             all_surfaces_spectrums, &err));
-  CL_RUN3(cl_mem d_all_surfaces_coeffs = clCreateBuffer(
-              context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-              num_surfaces * sizeof(cl_float), all_surfaces_coeffs, &err);)
-  CL_RUN3(cl_mem d_all_triangles_coords =
-              clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                             num_triangles * 3 * sizeof(cl_float4),
-                             all_triangles_coords, &err);)
-  CL_RUN3(cl_mem d_all_triangles_surfaces = clCreateBuffer(
-              context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-              num_triangles * sizeof(cl_int), all_triangles_surfaces, &err));
-  CL_RUN3(cl_mem d_out_data =
-              clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
-                             OUT_BUFFER_LEN * sizeof(cl_float4), outc, &err););
-
-  int randsize = RANDOM_POINTS_GIVER_ARRAY_LENGTH * OUT_BUFFER_LEN;
-  CL_RUN3(cl_mem d_g_to_be_returned =
-              clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_HOST_NO_ACCESS,
-                             randsize * sizeof(cl_float2), NULL, &err););
-  CL_RUN3(cl_mem d_g_final_plane =
-              clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_HOST_NO_ACCESS,
-                             randsize * sizeof(cl_float4), NULL, &err););
-  CL_RUN3(cl_mem d_random_buffer =
-              clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_HOST_NO_ACCESS,
-                             randsize * sizeof(cl_float2) * 2, NULL, &err););
-  CL_RUN3(cl_mem d_bg_buffer =
-              clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_HOST_NO_ACCESS,
-                             randsize * sizeof(cl_int), NULL, &err););
-
-  err = clSetKernelArg(kernel, 0, sizeof(cl_float), &cam_w);
-  CHECK_ERROR(err);
-  err = clSetKernelArg(kernel, 1, sizeof(cl_float), &cam_h);
-  CHECK_ERROR(err);
-  err = clSetKernelArg(kernel, 2, sizeof(cl_int), &num_pixels[0]);
-  CHECK_ERROR(err);
-  err = clSetKernelArg(kernel, 3, sizeof(cl_int), &num_pixels[1]);
-  CHECK_ERROR(err);
-  err = clSetKernelArg(kernel, 4, sizeof(cl_int), &seed);
-  CHECK_ERROR(err);
-  err = clSetKernelArg(kernel, 5, sizeof(cl_float), &min_distance);
-  CHECK_ERROR(err);
-  err = clSetKernelArg(kernel, 6, sizeof(cl_mem), &d_all_surfaces_spectrums);
-  CHECK_ERROR(err);
-  err = clSetKernelArg(kernel, 7, sizeof(cl_mem), &d_all_surfaces_coeffs);
-  CHECK_ERROR(err);
-  err = clSetKernelArg(kernel, 8, sizeof(cl_int), &num_surfaces);
-  CHECK_ERROR(err);
-  err = clSetKernelArg(kernel, 9, sizeof(cl_mem), &d_all_triangles_coords);
-  CHECK_ERROR(err);
-  err = clSetKernelArg(kernel, 10, sizeof(cl_mem), &d_all_triangles_surfaces);
-  CHECK_ERROR(err);
-  err = clSetKernelArg(kernel, 11, sizeof(cl_int), &num_triangles);
-  CHECK_ERROR(err);
-  err = clSetKernelArg(kernel, 12, sizeof(cl_float4), &light_pos4);
-  CHECK_ERROR(err);
-  err = clSetKernelArg(kernel, 13, sizeof(cl_float), &light_radius);
-  CHECK_ERROR(err);
-  err = clSetKernelArg(kernel, 14, sizeof(cl_int), &max_recursion);
-  CHECK_ERROR(err);
-  err = clSetKernelArg(kernel, 15, sizeof(cl_mem), &d_out_data);
-  CHECK_ERROR(err);
-
-  /**
- __global float2 *g_to_be_returned, __global float4 *g_final_plane, __global
- float2 *random_buffer , __global int *bgbuffer
- */
-  err = clSetKernelArg(kernel, 16, sizeof(cl_mem), &d_g_to_be_returned);
-  CHECK_ERROR(err);
-
-  err = clSetKernelArg(kernel, 17, sizeof(cl_mem), &d_g_final_plane);
-  CHECK_ERROR(err);
-
-  err = clSetKernelArg(kernel, 18, sizeof(cl_mem), &d_random_buffer);
-  CHECK_ERROR(err);
-
-  err = clSetKernelArg(kernel, 19, sizeof(cl_mem), &d_bg_buffer);
-  CHECK_ERROR(err);
-
-  size_t global_work_size[2] = {NUM_PIXELS_X, NUM_PIXELS_Y};
-  size_t local_size[2] = {8, 8};
-
-  CL_RUN2(clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global_work_size,
-                                 local_size, 0, NULL, NULL));
-  CL_RUN2(clFlush(queue));
-  CL_RUN2(clFinish(queue));
-
-  CL_RUN2(clEnqueueReadBuffer(queue, d_out_data, CL_TRUE, 0, 1, outc, 0, NULL,
-                              NULL));
+  std::cout << "num tris: " << tri_index
+            << " triangle 0: " << all_tris.all_triangles[0].coordinates1.x
+            << " " << all_tris.all_triangles[0].coordinates1.y << " "
+            << all_tris.all_triangles[0].coordinates1.z << " "
+            << all_tris.all_triangles[0].coordinates2.x << " "
+            << all_tris.all_triangles[0].coordinates2.y << " "
+            << all_tris.all_triangles[0].coordinates2.z << " "
+            << all_tris.all_triangles[0].coordinates3.x << " "
+            << all_tris.all_triangles[0].coordinates3.y << " "
+            << all_tris.all_triangles[0].coordinates3.z << " " << std::endl;
 
   ray exp;
   Vector3D e = {0.0, 0.01, 1.0};
   exp.ray_current_coordinates = e;
   exp.ray_direction = e;
 
-  save_png("./test.png", (unsigned char *)outc, NUM_PIXELS_X, NUM_PIXELS_Y);
+  // bool a = does_triangle_and_ray_intersect_correctly(exp, yellow_triangle);
+  printf("create thread \n");
+  int num_threads = 12;
+  pthread_t threads[num_threads];
+  thread_data data[num_threads];
+
+  for (int t = 0; t < num_threads; t++) {
+    data[t].all_surfaces = &all_surfaces;
+    data[t].all_tris = &all_tris;
+    data[t].light_position = light_position;
+    data[t].outc = outc;
+    data[t].thread_count = num_threads;
+    data[t].thread_index = t;
+    int rc = pthread_create(&threads[t], NULL, to_call_pthreads, &data[t]);
+    if (rc) {
+      printf("ERROR; return code from pthread_create() is %d\n", rc);
+      exit(-1);
+    }
+  }
+
+  printf("started all threads. \n");
+
+  for (int t = 0; t < num_threads; t++) {
+    pthread_join(threads[t], NULL);
+  }
+  printf("joined threads \n");
+  save_png("./test.png", outc, NUM_PIXELS_X, NUM_PIXELS_Y);
 
   return 0;
 }
