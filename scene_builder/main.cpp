@@ -11,6 +11,8 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <algorithm>
+
 #if defined(__linux__) || defined(_WIN32)
     #include <GL/gl.h>
 #elif defined(__APPLE__)
@@ -72,6 +74,8 @@ float inital_z_placement = -2.8;
 int selected_model_index = 0; // first object model is empty and selected
 int num_of_objects = 0;       // first object model is empty and selected
 int num_of_models = 4;
+
+std::map<std::string, GLuint> texturePointers;
 
 GLuint program, picker_program;
 mat4 view_matrix, projection_matrix;
@@ -270,7 +274,7 @@ struct object_model *add_object(ObjectType obj_type, const char *filename)
             return nullptr;
         }
         // load shaded object model
-        shaded_obj->load_model_from_json(filename);
+        shaded_obj->load_model_from_json(filename, texturePointers);
         shaded_obj->Program = program;
         shaded_obj->PickerProgram = picker_program;
         shaded_obj->initModel();
@@ -390,28 +394,28 @@ void print_all_objects()
 void create_basic_objects()
 {
     cube_shaded_object = (sobj::shaded_object *) malloc(sizeof(sobj::shaded_object));
-    cube_shaded_object->load_model_from_json(CUBE_PATH);
+    cube_shaded_object->load_model_from_json(CUBE_PATH, texturePointers);
     cube_shaded_object->Program = program;
     cube_shaded_object->PickerProgram = picker_program;
     cube_shaded_object->initModel();
     printf("cube loaded\n");
 
     sphere_shaded_object = (sobj::shaded_object *) malloc(sizeof(sobj::shaded_object));
-    sphere_shaded_object->load_model_from_json(SPHERE_PATH);
+    sphere_shaded_object->load_model_from_json(SPHERE_PATH, texturePointers);
     sphere_shaded_object->Program = program;
     sphere_shaded_object->PickerProgram = picker_program;
     sphere_shaded_object->initModel();
     printf("sphere loaded\n");
 
     pointLight_shaded_object = (sobj::shaded_object *) malloc(sizeof(sobj::shaded_object));
-    pointLight_shaded_object->load_model_from_json(POINTLIGHT_PATH);
+    pointLight_shaded_object->load_model_from_json(POINTLIGHT_PATH, texturePointers);
     pointLight_shaded_object->Program = program;
     pointLight_shaded_object->PickerProgram = picker_program;
     pointLight_shaded_object->initModel();
     printf("pointLight loaded\n");
 
     arrow_shaded_objects[0] = (sobj::shaded_object *) malloc(sizeof(sobj::shaded_object));
-    arrow_shaded_objects[0]->load_model_from_json(ARROW_PATH_1);
+    arrow_shaded_objects[0]->load_model_from_json(ARROW_PATH_1, texturePointers);
     arrow_shaded_objects[0]->Program = program;
     arrow_shaded_objects[0]->PickerProgram = picker_program;
     arrow_shaded_objects[0]->initModel();
@@ -419,14 +423,14 @@ void create_basic_objects()
     printf("arrow loaded\n");
 
     arrow_shaded_objects[1] = (sobj::shaded_object *) malloc(sizeof(sobj::shaded_object));
-    arrow_shaded_objects[1]->load_model_from_json(ARROW_PATH_2);
+    arrow_shaded_objects[1]->load_model_from_json(ARROW_PATH_2, texturePointers);
     arrow_shaded_objects[1]->Program = program;
     arrow_shaded_objects[1]->PickerProgram = picker_program;
     arrow_shaded_objects[1]->initModel();
     arrow_shaded_objects[1]->unique_color = INT_TO_UNIQUE_COLOR(2);
 
     arrow_shaded_objects[2] = (sobj::shaded_object *) malloc(sizeof(sobj::shaded_object));
-    arrow_shaded_objects[2]->load_model_from_json(ARROW_PATH_3);
+    arrow_shaded_objects[2]->load_model_from_json(ARROW_PATH_3, texturePointers);
     arrow_shaded_objects[2]->Program = program;
     arrow_shaded_objects[2]->PickerProgram = picker_program;
     arrow_shaded_objects[2]->initModel();

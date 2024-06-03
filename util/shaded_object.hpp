@@ -4,6 +4,7 @@
 #include "data_types.hpp"
 #include "load_model.hpp"
 #include "model_projections.hpp"
+#include "png_utils.hpp"
 #if defined(__linux__) || defined(_WIN32)
     #include <GL/gl.h>
 #elif defined(__APPLE__)
@@ -19,7 +20,7 @@
     x;                                                                         \
     auto err = glGetError();                                                   \
     if (err != 0) {                                                            \
-      std::cout << "GL ERROR: " << __LINE__ << " " << err << " "               \
+      std::cout << "GL ERROR: " << __LINE__  << " " << __FILE__ << " " << err << " "               \
                 /* FIXME: << glewGetErrorString(err) */<< std::endl;                       \
       exit(1);                                                                 \
     }                                                                          \
@@ -44,9 +45,9 @@ public:
 
   GLuint VAO;
   GLuint VBO;
-  GLuint Program;
+  GLuint Program = 0;
   GLuint PickerProgram = 0;
-  GLuint TexturePointer; // when loading the texture
+  GLuint TexturePointer = (GLuint) - 1; // when loading the texture
 
   GLuint vPositionPointer; // vertex-attirb vec4
   GLuint NormalPointer;    // vertex-attrib vec4
@@ -74,7 +75,7 @@ public:
    *
    * @param filename
    */
-  void load_model_from_json(const char *filename) {
+  void load_model_from_json(const char *filename, std::map<std::string, GLuint> &texture_map) {
     std::ifstream file2(filename);
     std::stringstream buffer;
     buffer << file2.rdbuf();
@@ -85,8 +86,18 @@ public:
     smodel.zax_from_json(json2.c_str());
 
     std::cout << "Loaded Model " << smodel << std::endl;
+    model m = to_model(smodel);
+    memcpy(&inner_model, &m, sizeof(model));
+    TexturePointer = (GLuint) - 1;
 
-    inner_model = to_model(smodel);
+    if(m.material.texture_path != ""){
+      if(texture_map.find(m.material.texture_path) == texture_map.end()){
+        std::cout << "Loading texture " << m.material.texture_path << std::endl;
+        int w,h;
+        texture_map[m.material.texture_path] = loadPNG(m.material.texture_path.c_str(), &w, &h);
+      }
+      TexturePointer = texture_map[m.material.texture_path];
+    }
   }
 
   /**
@@ -243,10 +254,11 @@ public:
     OPGL(glUniform4fv(AmbientMultPointer, 1, inner_model.material.ambient));
     OPGL(glUniform1f(ShininessPointer, inner_model.material.shininess));
 
-    bool has_texture = (TexturePointer < (unsigned)-1);
+    bool has_texture = (TexturePointer < (GLuint)-1);
     OPGL(glUniform1i(HasTexturePointer, (int)has_texture));
 
     if (has_texture) {
+      std::cout << "has texture " << has_texture << " " << TexturePointer << " " << (unsigned) -1 << " " << " num tris: " << inner_model.triangles.size() << std::endl;
       OPGL(glActiveTexture(GL_TEXTURE0));
       OPGL(glBindTexture(GL_TEXTURE_2D, TexturePointer));
       OPGL(glUniform1i(ShaderTextureSampler, 0));
