@@ -87,7 +87,11 @@ public:
 
     std::cout << "Loaded Model " << smodel << std::endl;
     model m = to_model(smodel);
-    memcpy(&inner_model, &m, sizeof(model));
+    memcpy(&(inner_model.material), &(m.material), sizeof(material_properties));
+    for(int i = 0; i < m.triangles.size(); i++){
+      inner_model.triangles.push_back(m.triangles[i]);
+    }
+
     TexturePointer = (GLuint) - 1;
 
     if(m.material.texture_path != ""){

@@ -98,6 +98,14 @@ struct object_model *pointLight_object;
 struct object_model **object_models;
 int object_models_size = 10;
 
+sobj::shaded_object* get_empty_object()
+{
+    sobj::shaded_object obj;
+    auto ptr = (sobj::shaded_object *) malloc(sizeof(sobj::shaded_object));
+    memcpy(ptr, &obj, sizeof(sobj::shaded_object));
+    return ptr;
+}
+
 void create_object_matrices(struct object_model *obj)
 {
     if (obj != nullptr)
@@ -267,7 +275,7 @@ struct object_model *add_object(ObjectType obj_type, const char *filename)
         }
 
         // allocate memory to new shaded_object to be loaded
-        shaded_obj = (sobj::shaded_object *) malloc(sizeof(sobj::shaded_object));
+        shaded_obj = get_empty_object();
         if (shaded_obj == nullptr) 
         {
             perror("Error allocating memory to shaded_obj in add_object\n");
@@ -393,28 +401,29 @@ void print_all_objects()
 // load and create cube, sphere and the arrow model for object transformation
 void create_basic_objects()
 {
-    cube_shaded_object = (sobj::shaded_object *) malloc(sizeof(sobj::shaded_object));
+    
+    cube_shaded_object = get_empty_object();
     cube_shaded_object->load_model_from_json(CUBE_PATH, texturePointers);
     cube_shaded_object->Program = program;
     cube_shaded_object->PickerProgram = picker_program;
     cube_shaded_object->initModel();
     printf("cube loaded\n");
 
-    sphere_shaded_object = (sobj::shaded_object *) malloc(sizeof(sobj::shaded_object));
+    sphere_shaded_object = get_empty_object();
     sphere_shaded_object->load_model_from_json(SPHERE_PATH, texturePointers);
     sphere_shaded_object->Program = program;
     sphere_shaded_object->PickerProgram = picker_program;
     sphere_shaded_object->initModel();
     printf("sphere loaded\n");
 
-    pointLight_shaded_object = (sobj::shaded_object *) malloc(sizeof(sobj::shaded_object));
+    pointLight_shaded_object =  get_empty_object();
     pointLight_shaded_object->load_model_from_json(POINTLIGHT_PATH, texturePointers);
     pointLight_shaded_object->Program = program;
     pointLight_shaded_object->PickerProgram = picker_program;
     pointLight_shaded_object->initModel();
     printf("pointLight loaded\n");
 
-    arrow_shaded_objects[0] = (sobj::shaded_object *) malloc(sizeof(sobj::shaded_object));
+    arrow_shaded_objects[0] =  get_empty_object();
     arrow_shaded_objects[0]->load_model_from_json(ARROW_PATH_1, texturePointers);
     arrow_shaded_objects[0]->Program = program;
     arrow_shaded_objects[0]->PickerProgram = picker_program;
@@ -422,14 +431,14 @@ void create_basic_objects()
     arrow_shaded_objects[0]->unique_color = INT_TO_UNIQUE_COLOR(1);
     printf("arrow loaded\n");
 
-    arrow_shaded_objects[1] = (sobj::shaded_object *) malloc(sizeof(sobj::shaded_object));
+    arrow_shaded_objects[1] =  get_empty_object();
     arrow_shaded_objects[1]->load_model_from_json(ARROW_PATH_2, texturePointers);
     arrow_shaded_objects[1]->Program = program;
     arrow_shaded_objects[1]->PickerProgram = picker_program;
     arrow_shaded_objects[1]->initModel();
     arrow_shaded_objects[1]->unique_color = INT_TO_UNIQUE_COLOR(2);
 
-    arrow_shaded_objects[2] = (sobj::shaded_object *) malloc(sizeof(sobj::shaded_object));
+    arrow_shaded_objects[2] =  get_empty_object();
     arrow_shaded_objects[2]->load_model_from_json(ARROW_PATH_3, texturePointers);
     arrow_shaded_objects[2]->Program = program;
     arrow_shaded_objects[2]->PickerProgram = picker_program;
