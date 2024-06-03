@@ -16,16 +16,16 @@
 #include <map>
 #include <sstream>
 
-#define OPGL(x)                                                                \
-  {                                                                            \
-    x;                                                                         \
-    auto err = glGetError();                                                   \
-    if (err != 0) {                                                            \
-      std::cout << "GL ERROR: " << __LINE__  << " " << __FILE__ << " " << err << " "               \
-                /* FIXME: << glewGetErrorString(err) */<< std::endl;                       \
-      exit(1);                                                                 \
-    }                                                                          \
-  }
+#define OPGL(x)  x                                                              \
+//   {                                                                            \
+//     x;                                                                         \
+//     auto err = glGetError();                                                   \
+//     if (err != 0) {                                                            \
+//       std::cout << "GL ERROR: " << __LINE__  << " " << __FILE__ << " " << err << " "               \
+//                 /* FIXME: << glewGetErrorString(err) */<< std::endl;                       \
+//       exit(1);                                                                 \
+//     }                                                                          \
+//   }
 
 namespace sobj {
 /**
@@ -95,11 +95,11 @@ public:
 
     TexturePointer = (GLuint) - 1;
 
-    if(m.material.texture_path != ""){
+    if(strlen(m.material.texture_path) > 0){
       if(texture_map.find(m.material.texture_path) == texture_map.end()){
         std::cout << "Loading texture " << m.material.texture_path << std::endl;
         int w,h;
-        texture_map[m.material.texture_path] = loadPNG(m.material.texture_path.c_str(), &w, &h);
+        texture_map[m.material.texture_path] = loadPNG(m.material.texture_path, &w, &h);
       }
       TexturePointer = texture_map[m.material.texture_path];
     }

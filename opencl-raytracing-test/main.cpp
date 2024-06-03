@@ -1010,7 +1010,327 @@ void XYZToSpectrum(double X, double Y, double Z, spectrum_of_light *spec) {
   }
 }
 
+#define NUM_COLORS 3
+#define NUM_WAVELENGTHS ((700 - 380) / 5 + 1)
+
+const double redSpectrum[] = {
+    0.00, // 380 nm
+    0.00, // 385 nm
+    0.00, // 390 nm
+    0.00, // 395 nm
+    0.00, // 400 nm
+    0.00, // 405 nm
+    0.00, // 410 nm
+    0.00, // 415 nm
+    0.00, // 420 nm
+    0.00, // 425 nm
+    0.00, // 430 nm
+    0.00, // 435 nm
+    0.00, // 440 nm
+    0.00, // 445 nm
+    0.00, // 450 nm
+    0.00, // 455 nm
+    0.00, // 460 nm
+    0.00, // 465 nm
+    0.00, // 470 nm
+    0.00, // 475 nm
+    0.00, // 480 nm
+    0.00, // 485 nm
+    0.00, // 490 nm
+    0.00, // 495 nm
+    0.00, // 500 nm
+    0.00, // 505 nm
+    0.00, // 510 nm
+    0.00, // 515 nm
+    0.05, // 520 nm
+    0.10, // 525 nm
+    0.15, // 530 nm
+    0.20, // 535 nm
+    0.30, // 540 nm
+    0.40, // 545 nm
+    0.50, // 550 nm
+    0.60, // 555 nm
+    0.70, // 560 nm
+    0.80, // 565 nm
+    0.90, // 570 nm
+    1.00, // 575 nm
+    0.95, // 580 nm
+    0.90, // 585 nm
+    0.85, // 590 nm
+    0.80, // 595 nm
+    0.75, // 600 nm
+    0.70, // 605 nm
+    0.65, // 610 nm
+    0.60, // 615 nm
+    0.55, // 620 nm
+    0.50, // 625 nm
+    0.45, // 630 nm
+    0.40, // 635 nm
+    0.35, // 640 nm
+    0.30, // 645 nm
+    0.25, // 650 nm
+    0.20, // 655 nm
+    0.15, // 660 nm
+    0.10, // 665 nm
+    0.05, // 670 nm
+    0.00, // 675 nm
+    0.00, // 680 nm
+    0.00, // 685 nm
+    0.00, // 690 nm
+    0.00, // 695 nm
+    0.00  // 700 nm
+};
+
+const double greenSpectrum[] = {
+    0.00, // 380 nm
+    0.00, // 385 nm
+    0.00, // 390 nm
+    0.00, // 395 nm
+    0.00, // 400 nm
+    0.00, // 405 nm
+    0.00, // 410 nm
+    0.00, // 415 nm
+    0.00, // 420 nm
+    0.00, // 425 nm
+    0.00, // 430 nm
+    0.00, // 435 nm
+    0.00, // 440 nm
+    0.00, // 445 nm
+    0.00, // 450 nm
+    0.00, // 455 nm
+    0.00, // 460 nm
+    0.00, // 465 nm
+    0.00, // 470 nm
+    0.00, // 475 nm
+    0.00, // 480 nm
+    0.00, // 485 nm
+    0.00, // 490 nm
+    0.00, // 495 nm
+    0.00, // 500 nm
+    0.00, // 505 nm
+    0.05, // 510 nm
+    0.10, // 515 nm
+    0.20, // 520 nm
+    0.30, // 525 nm
+    0.40, // 530 nm
+    0.50, // 535 nm
+    0.60, // 540 nm
+    0.70, // 545 nm
+    0.80, // 550 nm
+    0.90, // 555 nm
+    1.00, // 560 nm
+    0.95, // 565 nm
+    0.90, // 570 nm
+    0.85, // 575 nm
+    0.80, // 580 nm
+    0.75, // 585 nm
+    0.70, // 590 nm
+    0.65, // 595 nm
+    0.60, // 600 nm
+    0.55, // 605 nm
+    0.50, // 610 nm
+    0.45, // 615 nm
+    0.40, // 620 nm
+    0.35, // 625 nm
+    0.30, // 630 nm
+    0.25, // 635 nm
+    0.20, // 640 nm
+    0.15, // 645 nm
+    0.10, // 650 nm
+    0.05, // 655 nm
+    0.00, // 660 nm
+    0.00, // 665 nm
+    0.00, // 670 nm
+    0.00, // 675 nm
+    0.00, // 680 nm
+    0.00, // 685 nm
+    0.00, // 690 nm
+    0.00, // 695 nm
+    0.00  // 700 nm
+};
+
+const double blueSpectrum[] = {
+    0.00, // 380 nm
+    0.05, // 385 nm
+    0.10, // 390 nm
+    0.20, // 395 nm
+    0.30, // 400 nm
+    0.40, // 405 nm
+    0.50, // 410 nm
+    0.60, // 415 nm
+    0.70, // 420 nm
+    0.80, // 425 nm
+    0.90, // 430 nm
+    1.00, // 435 nm
+    0.95, // 440 nm
+    0.90, // 445 nm
+    0.85, // 450 nm
+    0.80, // 455 nm
+    0.75, // 460 nm
+    0.70, // 465 nm
+    0.65, // 470 nm
+    0.60, // 475 nm
+    0.55, // 480 nm
+    0.50, // 485 nm
+    0.45, // 490 nm
+    0.40, // 495 nm
+    0.35, // 500 nm
+    0.30, // 505 nm
+    0.25, // 510 nm
+    0.20, // 515 nm
+    0.15, // 520 nm
+    0.10, // 525 nm
+    0.05, // 530 nm
+    0.00, // 535 nm
+    0.00, // 540 nm
+    0.00, // 545 nm
+    0.00, // 550 nm
+    0.00, // 555 nm
+    0.00, // 560 nm
+    0.00, // 565 nm
+    0.00, // 570 nm
+    0.00, // 575 nm
+    0.00, // 580 nm
+    0.00, // 585 nm
+    0.00, // 590 nm
+    0.00,
+    0.00,
+    0.00,
+    0.00,
+    0.00,
+    0.00,
+    0.00,
+    0.00,
+    0.00,
+    0.00,
+    0.00,
+    0.00,
+    0.00,
+    0.00,
+    0.00,
+    0.00,
+    0.00,
+    0.00,
+    0.00,
+    0.00,
+    0.00,
+    0.00,
+    0.00,
+};
+
+
+void RGBToSpectrum(double R, double G, double B, spectrum_of_light *spec) {
+  for (int i = 0; i < spec->number_of_elements; i++) {
+    spec->spectrum[i] = (R * redSpectrum[i]) +
+                        (G * greenSpectrum[i]) +
+                        (B * blueSpectrum[i]);
+  }
+}
+
 ///--------------------------------------------------------------
+void load_model(model m, model **modelp, surface *all_surfaces,
+                int *current_surface_index, triangle_array *all_triangles,
+                int *current_triangle_index, mat4 Transform, mat4 Projection);
+
+void load_json_scene(const std::string filepath, surface *all_surfaces,
+                     int *current_surface_index, triangle_array *all_triangles,
+                     int *current_triangle_index, Vector3D *light_position) {
+  std::ifstream file(
+      filepath); // open the file containing the json scene description
+
+  std::stringstream buffer;
+  buffer << file.rdbuf();
+  std::string json = buffer.str();
+  file.close();
+
+  serializable_scene sscene;
+  sscene.zax_from_json(json.c_str());
+
+  // std::cout << "Loaded Scene " << sscene << std::endl;
+
+  scene _scene = to_scene(sscene);
+  std::cout << "number of models: " << _scene.models.size() << std::endl;
+  //TODO set to 1
+  for (int i = 1; i < _scene.models.size(); i++) {
+    model m = _scene.models[i];
+    model *modelp;
+    std::cout << (m.triangles[0].p0) << std::endl;
+    load_model(m, &modelp, all_surfaces, current_surface_index, all_triangles,
+               current_triangle_index, Translate(0,0,-1)*_scene.view * _scene.transforms[i],
+               identity());
+  }
+}
+
+void load_model(model m, model **modelp, surface *all_surfaces,
+                int *current_surface_index, triangle_array *all_triangles,
+                int *current_triangle_index, mat4 Transform, mat4 Projection) {
+                // invert_normals(&m);
+  model *new_model = (model *)calloc(1, sizeof(model));
+  new_model->material.diffuse = m.material.diffuse;
+  new_model->material.shininess = m.material.shininess;
+
+  for (auto t : m.triangles) {
+    new_model->triangles.push_back(t);
+  }
+
+  all_surfaces[*current_surface_index].diffusion_coefficient =
+      1.0 / (1.0 + (new_model->material.shininess / 50.0));
+  printf("coeff: %.2f \n",
+         all_surfaces[*current_surface_index].diffusion_coefficient);
+  all_surfaces[*current_surface_index].surface_spectrum.number_of_elements = 65;
+
+  double xyz_linear[3];
+  // RGBtoXYZ(new_model->material.diffuse.x * 255,
+  //          new_model->material.diffuse.y * 255,
+  //          new_model->material.diffuse.z * 255, &xyz_linear[0], &xyz_linear[1],
+  //          &xyz_linear[2]);
+  // std::cout << "xyz: " << xyz_linear[0] << " " << xyz_linear[1] << " "
+  //           << xyz_linear[2] << std::endl;
+  // XYZToSpectrum(xyz_linear[0], xyz_linear[1], xyz_linear[2],
+  //               &(all_surfaces[*current_surface_index].surface_spectrum));
+  // try yellow
+  new_model->material.diffuse = vec4(1, 1, 0, 1);
+
+  // set spectrum to zero
+  for (int i = 0; i < all_surfaces[*current_surface_index].surface_spectrum.number_of_elements; i++) {
+    all_surfaces[*current_surface_index].surface_spectrum.spectrum[i] = 0;
+  }
+
+  RGBToSpectrum(1, 0, 1, &(all_surfaces[*current_surface_index].surface_spectrum));
+
+  for (auto t : new_model->triangles) {
+    t.p0 = Projection * Transform * t.p0;
+    t.p1 = Projection * Transform * t.p1;
+    t.p2 = Projection * Transform * t.p2;
+
+    all_triangles->all_triangles[*current_triangle_index].coordinates1.x =
+        t.p0.x;
+    all_triangles->all_triangles[*current_triangle_index].coordinates1.y =
+        t.p0.y;
+    all_triangles->all_triangles[*current_triangle_index].coordinates1.z =
+        t.p0.z * -1;
+
+    all_triangles->all_triangles[*current_triangle_index].coordinates2.x =
+        t.p1.x;
+    all_triangles->all_triangles[*current_triangle_index].coordinates2.y =
+        t.p1.y;
+    all_triangles->all_triangles[*current_triangle_index].coordinates2.z =
+        t.p1.z * -1;
+
+    all_triangles->all_triangles[*current_triangle_index].coordinates3.x =
+        t.p2.x;
+    all_triangles->all_triangles[*current_triangle_index].coordinates3.y =
+        t.p2.y;
+    all_triangles->all_triangles[*current_triangle_index].coordinates3.z =
+        t.p2.z * -1;
+
+    all_triangles->all_triangles[*current_triangle_index].surface_number =
+        *current_surface_index;
+    *current_triangle_index += 1;
+    all_triangles->total_number_of_triangles += 1;
+  }
+  *current_surface_index += 1;
+}
 
 void load_json_model(const std::string filepath, model **modelp,
                      surface *all_surfaces, int *current_surface_index,
@@ -1027,62 +1347,9 @@ void load_json_model(const std::string filepath, model **modelp,
 
   std::cout << "Loaded Model " << smodel << std::endl;
 
-  model *new_model = (model *)calloc(1, sizeof(model));
-  model _model = to_model(smodel);
-  new_model->material.diffuse = _model.material.diffuse;
-  new_model->material.shininess = _model.material.shininess;
-
-  for (auto t : _model.triangles) {
-    new_model->triangles.push_back(t);
-  }
-
-  all_surfaces[*current_surface_index].diffusion_coefficient =
-      1.0 / (1.0 + (new_model->material.shininess / 50.0));
-  printf("coeff: %.2f \n",all_surfaces[*current_surface_index].diffusion_coefficient);
-  all_surfaces[*current_surface_index].surface_spectrum.number_of_elements = 65;
-
-  double xyz_linear[3];
-  RGBtoXYZ(new_model->material.diffuse.x * 255,
-           new_model->material.diffuse.y * 255,
-           new_model->material.diffuse.z * 255, &xyz_linear[0], &xyz_linear[1],
-           &xyz_linear[2]);
-  std::cout << "xyz: " << xyz_linear[0] << " " << xyz_linear[1] << " "
-            << xyz_linear[2] << std::endl;
-  XYZToSpectrum(xyz_linear[0], xyz_linear[1], xyz_linear[2],
-                &(all_surfaces[*current_surface_index].surface_spectrum));
-
-  for (auto t : new_model->triangles) {
-    t.p0 = Projection * Transform * t.p0;
-    t.p1 = Projection * Transform * t.p1;
-    t.p2 = Projection * Transform * t.p2;
-
-    all_triangles->all_triangles[*current_triangle_index].coordinates1.x =
-        t.p0.x;
-    all_triangles->all_triangles[*current_triangle_index].coordinates1.y =
-        t.p0.y;
-    all_triangles->all_triangles[*current_triangle_index].coordinates1.z =
-        t.p0.z;
-
-    all_triangles->all_triangles[*current_triangle_index].coordinates2.x =
-        t.p1.x;
-    all_triangles->all_triangles[*current_triangle_index].coordinates2.y =
-        t.p1.y;
-    all_triangles->all_triangles[*current_triangle_index].coordinates2.z =
-        t.p1.z;
-
-    all_triangles->all_triangles[*current_triangle_index].coordinates3.x =
-        t.p2.x;
-    all_triangles->all_triangles[*current_triangle_index].coordinates3.y =
-        t.p2.y;
-    all_triangles->all_triangles[*current_triangle_index].coordinates3.z =
-        t.p2.z;
-
-    all_triangles->all_triangles[*current_triangle_index].surface_number =
-        *current_surface_index;
-    *current_triangle_index += 1;
-    all_triangles->total_number_of_triangles += 1;
-  }
-  *current_surface_index += 1;
+  model _m = to_model(smodel);
+  load_model(_m, modelp, all_surfaces, current_surface_index, all_triangles,
+             current_triangle_index, Transform, Projection);
 }
 
 struct thread_data {
@@ -1126,6 +1393,16 @@ void parallel_trace(surface_array *all_surfaces, triangle_array *all_tris,
   }
 }
 
+void print_triangle(ray_tracer::triangle t) {
+  printf("Triangle: \n");
+  printf("P0: %f %f %f \n", t.coordinates1.x, t.coordinates1.y,
+         t.coordinates1.z);
+  printf("P1: %f %f %f \n", t.coordinates2.x, t.coordinates2.y,
+         t.coordinates2.z);
+  printf("P2: %f %f %f \n", t.coordinates3.x, t.coordinates3.y,
+         t.coordinates3.z);
+}
+
 int main() {
   surface_array all_surfaces;
   triangle_array all_tris;
@@ -1133,13 +1410,18 @@ int main() {
   int surface_index = 0;
   int tri_index = 0;
   model *to_free;
-  load_json_model("../test/bunny.json", &to_free, (all_surfaces.surface_array),
-                  &surface_index, &all_tris, &tri_index,
-                  Translate(0.0, 0.0, 2.0) * RotateY(120) * RotateX(180), identity());
+  // load_json_model("/home/emrgncr/Documents/repos/comp410/comp410-project/"
+  //                 "shader_editor/aromage_mushroom.json",
+  //                 &to_free, (all_surfaces.surface_array), &surface_index,
+  //                 &all_tris, &tri_index,
+  //                 Translate(0.0, 0.0, 2.0) * RotateY(120) * RotateX(180),
+  //                 identity());
   Vector3D light_position;
-  light_position.x = 0.0;
+  light_position.x = 3.0;
   light_position.y = 0.0;
   light_position.z = 0.0;
+ 
+  load_json_scene("/home/emrgncr/Documents/repos/comp410/comp410-project/scene_builder/mushroom.json", (all_surfaces.surface_array), &surface_index, &all_tris, &tri_index, &light_position);
 
   uchar *outc = (uchar *)calloc(OUT_BUFFER_LEN * 4, sizeof(uchar));
 
@@ -1153,6 +1435,8 @@ int main() {
             << all_tris.all_triangles[0].coordinates3.x << " "
             << all_tris.all_triangles[0].coordinates3.y << " "
             << all_tris.all_triangles[0].coordinates3.z << " " << std::endl;
+
+
 
   ray exp;
   Vector3D e = {0.0, 0.01, 1.0};

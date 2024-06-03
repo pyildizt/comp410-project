@@ -107,7 +107,7 @@ struct material_properties {
   vec4 diffuse;
   vec4 specular;
   float shininess;
-  std::string texture_path;
+  char texture_path[1024];
 
   material_properties() {
     // default gray material
@@ -115,7 +115,7 @@ struct material_properties {
     diffuse = vec4(0.8, 0.8, 0.8, 1.0);
     specular = vec4(0.3, 0.3, 0.3, 1.0);
     shininess = 10.0;
-    texture_path = "";
+    memset(texture_path, 0, 1024);
   }
 };
 

@@ -77,7 +77,8 @@ material_properties to_material_properties(serializable_material_properties s){
     ret.diffuse = to_vec4(s.diffuse);
     ret.specular = to_vec4(s.specular);
     ret.shininess = s.shininess;
-    ret.texture_path = s.texture_path;
+    memset(ret.texture_path, 0, 1024);
+    strcpy(ret.texture_path, s.texture_path.c_str());
     return ret;
 }
 

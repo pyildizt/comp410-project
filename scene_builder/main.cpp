@@ -87,24 +87,21 @@ vec4 light_position(1.0, 1.0, 1.0, 1.0); // light position for the shaded_object
 enum SelectedAction {NoAction, TranslateObject, ScaleObject, RotateObject};
 SelectedAction selected_action = NoAction;
 
-sobj::shaded_object *cube_shaded_object;
-sobj::shaded_object *sphere_shaded_object;
-sobj::shaded_object *pointLight_shaded_object;
-sobj::shaded_object *arrow_shaded_objects[3];
-sobj::shaded_object **shaded_objects;
-int shaded_objects_size = 10;
+sobj::shaded_object cube_shaded_object;
+sobj::shaded_object sphere_shaded_object;
+sobj::shaded_object pointLight_shaded_object;
+sobj::shaded_object arrow_shaded_objects[3];
+sobj::shaded_object shaded_objects[100];
 
-struct object_model *empty_object;
-struct object_model *pointLight_object;
-struct object_model **object_models;
-int object_models_size = 10;
 
-sobj::shaded_object* get_empty_object()
+struct object_model empty_object;
+struct object_model pointLight_object;
+struct object_model object_models[100];
+
+
+sobj::shaded_object get_empty_object()
 {
-    sobj::shaded_object obj = sobj::shaded_object();
-    auto ptr = (sobj::shaded_object *) malloc(sizeof(sobj::shaded_object));
-    memcpy(ptr, &obj, sizeof(sobj::shaded_object));
-    return ptr;
+    return sobj::shaded_object();
 }
 
 void create_object_matrices(struct object_model *obj)
@@ -176,29 +173,29 @@ void draw_object_arrows(struct object_model *obj, bool with_picking)
 
     // y-axis arrow
     if (with_picking)
-        arrow_shaded_objects[1]->display_picker(view_matrix * arrow_model_matrices[1], projection_matrix);
+        arrow_shaded_objects[1].display_picker(view_matrix * arrow_model_matrices[1], projection_matrix);
     else
-        arrow_shaded_objects[1]->display_real(view_matrix * arrow_model_matrices[1], projection_matrix, light_position);
+        arrow_shaded_objects[1].display_real(view_matrix * arrow_model_matrices[1], projection_matrix, light_position);
 
     if (selected_action == ScaleObject)
         return;
 
     // x-axis arrow
     if (with_picking)
-        arrow_shaded_objects[0]->display_picker(view_matrix * arrow_model_matrices[0], projection_matrix);
+        arrow_shaded_objects[0].display_picker(view_matrix * arrow_model_matrices[0], projection_matrix);
     else
-        arrow_shaded_objects[0]->display_real(view_matrix * arrow_model_matrices[0], projection_matrix, light_position);
+        arrow_shaded_objects[0].display_real(view_matrix * arrow_model_matrices[0], projection_matrix, light_position);
 
     // z-axis arrow
     if (with_picking)
-        arrow_shaded_objects[2]->display_picker(view_matrix * arrow_model_matrices[2], projection_matrix);
+        arrow_shaded_objects[2].display_picker(view_matrix * arrow_model_matrices[2], projection_matrix);
     else
-        arrow_shaded_objects[2]->display_real(view_matrix * arrow_model_matrices[2], projection_matrix, light_position);
+        arrow_shaded_objects[2].display_real(view_matrix * arrow_model_matrices[2], projection_matrix, light_position);
 }
 
 
 // Add object button function, if obj_type == Imported then filename string "exmaple.json" with path must be provided
-struct object_model *add_object(ObjectType obj_type, const char *filename)
+struct object_model add_object(ObjectType obj_type, const char *filename)
 {
     // If obj_type == Imported and filename is incorrect then give error and return
     if (obj_type == Imported)
@@ -207,88 +204,68 @@ struct object_model *add_object(ObjectType obj_type, const char *filename)
         if (!file2) 
         {
             std::cerr << "Error: Unable to open file " << filename << std::endl;
-            return nullptr;
+            exit(1);
         }
     }
 
     num_of_objects++;
 
     // reallocate memory to objects_model if necessary
-    if (num_of_objects > object_models_size)
+    if (num_of_objects > 100)
     {
-        object_models_size *= 2;
-        object_models = (struct object_model **) realloc(object_models, object_models_size * sizeof(struct object_model *));
-        if (object_models == nullptr) 
-        {
             perror("Error allocating memory to object_model in add_object\n");
-            return nullptr;
-        }
+            exit(1);
     }
 
-    // allocate memory to object_model
-    struct object_model *obj = (struct object_model *) malloc(sizeof(struct object_model));
-    if (obj == nullptr) 
-    {
-        perror("Error allocating memory to obj in add_object\n");
-        return nullptr;
-    }
-
+    object_model obj = object_model();
     // initialize object_model variables
-    obj->object_type = obj_type;
-    obj->object_coordinates = vec3(0.0, 0.0, inital_z_placement);
-    obj->model_matrix = Translate(0.0, 0.0, inital_z_placement);
-    obj->rotation_matrix = mat4(1.0f);
-    std::fill_n(obj->Theta, 3, 0.0f);
-    std::fill_n(obj->Scaling, 3, 0.0f);
-    std::fill_n(obj->Translation, 3, 0.0f);
-    obj->is_selected = false;
+    obj.object_type = obj_type;
+    obj.object_coordinates = vec3(0.0, 0.0, inital_z_placement);
+    obj.model_matrix = Translate(0.0, 0.0, inital_z_placement);
+    obj.rotation_matrix = mat4(1.0f);
+    std::fill_n(obj.Theta, 3, 0.0f);
+    std::fill_n(obj.Scaling, 3, 0.0f);
+    std::fill_n(obj.Translation, 3, 0.0f);
+    obj.is_selected = false;
 
-    sobj::shaded_object *shaded_obj;
+    sobj::shaded_object shaded_obj;
     // initialize other varibles depending on object type
     switch (obj_type)
     {
     // If objects are cube, sphere then no need to load new model
     case Cube:
-        obj->shaded_object_index = 0;
+        obj.shaded_object_index = 0;
         break;
 
     case Sphere:
-        obj->shaded_object_index = 1;
+        obj.shaded_object_index = 1;
         break;
 
     case PointLight:
-        obj->shaded_object_index = 2;
+        obj.shaded_object_index = 2;
         break;
 
     case Imported:
         num_of_models++;
 
         //reallocate memory to shaded_objects if necessary
-        if (num_of_models > shaded_objects_size)
+        if (num_of_models > 100)
         {
-            shaded_objects_size *= 2;
-            shaded_objects = (sobj::shaded_object **) realloc(shaded_objects, shaded_objects_size * sizeof(sobj::shaded_object *));
-            if (shaded_objects == nullptr) 
-            {
                 perror("Error allocating memory to shaded_objects in add_object\n");
-                return nullptr;
-            }
+                exit(1);
+
         }
 
         // allocate memory to new shaded_object to be loaded
         shaded_obj = get_empty_object();
-        if (shaded_obj == nullptr) 
-        {
-            perror("Error allocating memory to shaded_obj in add_object\n");
-            return nullptr;
-        }
+
         // load shaded object model
-        shaded_obj->load_model_from_json(filename, texturePointers);
-        shaded_obj->Program = program;
-        shaded_obj->PickerProgram = picker_program;
-        shaded_obj->initModel();
+        shaded_obj.load_model_from_json(filename, texturePointers);
+        shaded_obj.Program = program;
+        shaded_obj.PickerProgram = picker_program;
+        shaded_obj.initModel();
         // to keep track if object is duplicated later
-        obj->shaded_object_index = num_of_models-1;
+        obj.shaded_object_index = num_of_models-1;
         // add the new shaded object to list
         shaded_objects[num_of_models-1] = shaded_obj;
         break;
@@ -301,16 +278,16 @@ struct object_model *add_object(ObjectType obj_type, const char *filename)
     // if not empty then give programs and also create unique color
     if (obj_type != Empty)
     {
-        obj->unique_id_color = INT_TO_UNIQUE_COLOR(num_of_objects + 4); // 0: Empty, 1-3: reserved for arrows so +4
+        obj.unique_id_color = INT_TO_UNIQUE_COLOR((num_of_objects + 4)); // 0: Empty, 1-3: reserved for arrows so +4
 
-        shaded_obj->Program = program;
-        shaded_obj->PickerProgram = picker_program;
-        shaded_obj->unique_color = obj->unique_id_color;
+        shaded_obj.Program = program;
+        shaded_obj.PickerProgram = picker_program;
+        shaded_obj.unique_color = obj.unique_id_color;
     }
 
     // add object to object_models array
     object_models[num_of_objects-1] = obj;
-    std::cout << "Object #" << (num_of_objects-1) << " added: " << *(object_models[num_of_objects-1]) << std::endl;
+    std::cout << "Object #" << (num_of_objects-1) << " added: " << (object_models[num_of_objects-1]) << std::endl;
 
     return obj;
 }
@@ -323,65 +300,53 @@ struct object_model *duplicate_selected_object()
 
     num_of_objects++;
     // reallocate memory to objects_model if necessary
-    if (num_of_objects > object_models_size-3)
+    if (num_of_objects > 100-3)
     {
-        object_models_size *= 2;
-        object_models = (struct object_model **) realloc(object_models, object_models_size * sizeof(struct object_model *));
-        if (object_models == nullptr) 
-        {
             perror("Error allocating memory to object_model in duplicate_selected_object\n");
             return nullptr;
-        }
     }
 
     // allocate memory to object_model
-    struct object_model *new_obj = (struct object_model *) malloc(sizeof(struct object_model));
-    if (new_obj == nullptr) 
-    {
-        perror("Error allocating memory to new_obj in duplicate_selected_object\n");
-        return nullptr;
-    }
+    struct object_model new_obj = object_model();
 
-    struct object_model *old_obj = object_models[selected_model_index];
+    struct object_model old_obj = object_models[selected_model_index];
     // Do not duplicate Point Light
-    if (old_obj->object_type == PointLight)
+    if (old_obj.object_type == PointLight)
         return nullptr;
 
     // Point to original shaded_object (index in shaded_objects array)
     // Since no need to import shaded object when only new matrices are enough to draw it again
-    new_obj->shaded_object_index = old_obj->shaded_object_index;
+    new_obj.shaded_object_index = old_obj.shaded_object_index;
     
     // Duplicate object information
-    new_obj->object_type = old_obj->object_type;
-    new_obj->object_coordinates = old_obj->object_coordinates;
-    new_obj->model_matrix = old_obj->model_matrix;
-    new_obj->rotation_matrix = old_obj->rotation_matrix;
-    std::copy_n(old_obj->Theta, 3, new_obj->Theta);
-    std::copy_n(old_obj->Scaling, 3, new_obj->Scaling);
-    std::copy_n(old_obj->Translation, 3, new_obj->Translation);
+    new_obj.object_type = old_obj.object_type;
+    new_obj.object_coordinates = old_obj.object_coordinates;
+    new_obj.model_matrix = old_obj.model_matrix;
+    new_obj.rotation_matrix = old_obj.rotation_matrix;
+    std::copy_n(old_obj.Theta, 3, new_obj.Theta);
+    std::copy_n(old_obj.Scaling, 3, new_obj.Scaling);
+    std::copy_n(old_obj.Translation, 3, new_obj.Translation);
 
     // add object to object_models array
     object_models[num_of_objects-1] = old_obj;
-    std::cout << "Object #" << (num_of_objects-1) << " duplicated: " << *(object_models[num_of_objects-1]) << std::endl;
+    std::cout << "Object #" << (num_of_objects-1) << " duplicated: " << (object_models[num_of_objects-1]) << std::endl;
 
     // Select new object
-    old_obj->is_selected = false;
-    new_obj->is_selected = true;
-    return new_obj;
+    old_obj.is_selected = false;
+    new_obj.is_selected = true;
+    return &object_models[num_of_objects-1];
 }
 
 // free object memory at deletion
 void delete_selected_object()
 {
-    struct object_model *obj = object_models[selected_model_index];
-    if (obj->object_type == Empty || obj->object_type == PointLight)
+    struct object_model obj = object_models[selected_model_index];
+    if (obj.object_type == Empty || obj.object_type == PointLight)
         return;
 
-    if (obj != nullptr)
-        free(obj);
  
     // also remove object from object_models array but do not change num_of_objects
-    object_models[selected_model_index] = nullptr;
+    object_models[selected_model_index].shaded_object_index = -2;
 
     // make object selection empty
     selected_model_index = 0;
@@ -393,8 +358,8 @@ void print_all_objects()
     printf("==============================\n");
     for (int i = 0; i < num_of_objects; i++)
     {
-        if (object_models[i] != nullptr)
-            std::cout << "Object " << i << ": " << *(object_models[i]) << std::endl;
+        if (object_models[i].shaded_object_index != -2)
+            std::cout << "Object " << i << ": " << (object_models[i]) << std::endl;
     }
     printf("==============================\n");
 }
@@ -404,47 +369,47 @@ void create_basic_objects()
 {
     
     cube_shaded_object = get_empty_object();
-    cube_shaded_object->load_model_from_json(CUBE_PATH, texturePointers);
-    cube_shaded_object->Program = program;
-    cube_shaded_object->PickerProgram = picker_program;
-    cube_shaded_object->initModel();
+    cube_shaded_object.load_model_from_json(CUBE_PATH, texturePointers);
+    cube_shaded_object.Program = program;
+    cube_shaded_object.PickerProgram = picker_program;
+    cube_shaded_object.initModel();
     printf("cube loaded\n");
 
     sphere_shaded_object = get_empty_object();
-    sphere_shaded_object->load_model_from_json(SPHERE_PATH, texturePointers);
-    sphere_shaded_object->Program = program;
-    sphere_shaded_object->PickerProgram = picker_program;
-    sphere_shaded_object->initModel();
+    sphere_shaded_object.load_model_from_json(SPHERE_PATH, texturePointers);
+    sphere_shaded_object.Program = program;
+    sphere_shaded_object.PickerProgram = picker_program;
+    sphere_shaded_object.initModel();
     printf("sphere loaded\n");
 
     pointLight_shaded_object =  get_empty_object();
-    pointLight_shaded_object->load_model_from_json(POINTLIGHT_PATH, texturePointers);
-    pointLight_shaded_object->Program = program;
-    pointLight_shaded_object->PickerProgram = picker_program;
-    pointLight_shaded_object->initModel();
+    pointLight_shaded_object.load_model_from_json(POINTLIGHT_PATH, texturePointers);
+    pointLight_shaded_object.Program = program;
+    pointLight_shaded_object.PickerProgram = picker_program;
+    pointLight_shaded_object.initModel();
     printf("pointLight loaded\n");
 
     arrow_shaded_objects[0] =  get_empty_object();
-    arrow_shaded_objects[0]->load_model_from_json(ARROW_PATH_1, texturePointers);
-    arrow_shaded_objects[0]->Program = program;
-    arrow_shaded_objects[0]->PickerProgram = picker_program;
-    arrow_shaded_objects[0]->initModel();
-    arrow_shaded_objects[0]->unique_color = INT_TO_UNIQUE_COLOR(1);
+    arrow_shaded_objects[0].load_model_from_json(ARROW_PATH_1, texturePointers);
+    arrow_shaded_objects[0].Program = program;
+    arrow_shaded_objects[0].PickerProgram = picker_program;
+    arrow_shaded_objects[0].initModel();
+    arrow_shaded_objects[0].unique_color = INT_TO_UNIQUE_COLOR(1);
     printf("arrow loaded\n");
 
     arrow_shaded_objects[1] =  get_empty_object();
-    arrow_shaded_objects[1]->load_model_from_json(ARROW_PATH_2, texturePointers);
-    arrow_shaded_objects[1]->Program = program;
-    arrow_shaded_objects[1]->PickerProgram = picker_program;
-    arrow_shaded_objects[1]->initModel();
-    arrow_shaded_objects[1]->unique_color = INT_TO_UNIQUE_COLOR(2);
+    arrow_shaded_objects[1].load_model_from_json(ARROW_PATH_2, texturePointers);
+    arrow_shaded_objects[1].Program = program;
+    arrow_shaded_objects[1].PickerProgram = picker_program;
+    arrow_shaded_objects[1].initModel();
+    arrow_shaded_objects[1].unique_color = INT_TO_UNIQUE_COLOR(2);
 
     arrow_shaded_objects[2] =  get_empty_object();
-    arrow_shaded_objects[2]->load_model_from_json(ARROW_PATH_3, texturePointers);
-    arrow_shaded_objects[2]->Program = program;
-    arrow_shaded_objects[2]->PickerProgram = picker_program;
-    arrow_shaded_objects[2]->initModel();
-    arrow_shaded_objects[2]->unique_color = INT_TO_UNIQUE_COLOR(3);
+    arrow_shaded_objects[2].load_model_from_json(ARROW_PATH_3, texturePointers);
+    arrow_shaded_objects[2].Program = program;
+    arrow_shaded_objects[2].PickerProgram = picker_program;
+    arrow_shaded_objects[2].initModel();
+    arrow_shaded_objects[2].unique_color = INT_TO_UNIQUE_COLOR(3);
 }
 
 // Convert current objects to scene struct
@@ -452,36 +417,36 @@ struct scene convert_to_scene()
 {
     struct scene scene;
 
-    struct object_model *curr_object_model;
-    sobj::shaded_object *curr_shaded_object;
+    struct object_model curr_object_model;
+    sobj::shaded_object curr_shaded_object;
 
     for (int i = 0; i < num_of_objects; i++)
     {
         curr_object_model = object_models[i];
-        if (curr_object_model != nullptr)
+        if (curr_object_model.shaded_object_index != -2)
         {
-            if (curr_object_model->object_type != Empty || curr_object_model->object_type != PointLight)
+            if (curr_object_model.object_type != Empty || curr_object_model.object_type != PointLight)
             {
-                curr_shaded_object = shaded_objects[curr_object_model->shaded_object_index];
-                if (curr_shaded_object != nullptr)
+                curr_shaded_object = shaded_objects[curr_object_model.shaded_object_index];
+                if (true/*curr_shaded_object != nullptr*/)
                 {
                     // add object model to scene models
-                    scene.models.push_back(curr_shaded_object->inner_model);
+                    scene.models.push_back(curr_shaded_object.inner_model);
 
                     // add object transform matrix to scene transforms
-                    scene.transforms.push_back(curr_object_model->model_matrix * Scale(.1, .1, .1));
+                    scene.transforms.push_back(curr_object_model.model_matrix * Scale(.1, .1, .1));
                 }
             }
-            else if (curr_object_model->object_type == PointLight)
+            else if (curr_object_model.object_type == PointLight)
             {
-                curr_shaded_object = shaded_objects[curr_object_model->shaded_object_index];
-                if (curr_shaded_object != nullptr)
+                curr_shaded_object = shaded_objects[curr_object_model.shaded_object_index];
+                if (true/*curr_shaded_object != nullptr*/)
                 {
                     // This is an object so change it to light and give that to the scene
                     // We only need the position information from this object
                     struct light light;
-                    light.position = vec4(curr_object_model->object_coordinates.x, 
-                        curr_object_model->object_coordinates.y, curr_object_model->object_coordinates.z, 1.0);
+                    light.position = vec4(curr_object_model.object_coordinates.x, 
+                        curr_object_model.object_coordinates.y, curr_object_model.object_coordinates.z, 1.0);
                     scene.scene_light = light;
                 }
             }
@@ -523,27 +488,16 @@ void init()
     glClearColor( 1.0, 1.0, 1.0, 1.0 ); 
 
     // allocate memory for shaded_objects array containing pointers to all shaded_objects
-    shaded_objects = (sobj::shaded_object **) malloc(shaded_objects_size * sizeof(sobj::shaded_object *));
-    if (shaded_objects == nullptr) 
-        perror("Error allocating memory to shaded_objects in init\n");
-    else 
-    {
-        // add cube, sphere, pointLight and arrows
-        shaded_objects[0] = cube_shaded_object;
-        shaded_objects[1] = sphere_shaded_object;
-        shaded_objects[2] = pointLight_shaded_object;
-        shaded_objects[3] = *arrow_shaded_objects;
-        for (int i = 4; i < shaded_objects_size; i++)
-            shaded_objects[i] = nullptr;
-    }
+
+    // add cube, sphere, pointLight and arrows
+    shaded_objects[0] = cube_shaded_object;
+    shaded_objects[1] = sphere_shaded_object;
+    shaded_objects[2] = pointLight_shaded_object;
+    shaded_objects[3] = *arrow_shaded_objects;
 
     // allocate memory for object_models array containing pointers to all object_models
-    object_models = (struct object_model **) malloc(object_models_size * sizeof(struct object_model *));
-    if (object_models == nullptr) 
-        perror("Error allocating memory to object_models in init\n");
-    else 
-        for (int i = 0; i < object_models_size; i++)
-            object_models[i] = nullptr;      
+    for (int i = 0; i < 100; i++)
+        object_models[i].shaded_object_index = -2;      
 
     // create first empty object, this will be selected when background is clicked 
     empty_object = add_object(Empty, "");
@@ -558,22 +512,22 @@ void draw_objects(bool with_picking)
     camera_at = camera_coordinates + camera_front;
     view_matrix = LookAt(camera_coordinates, camera_at, camera_up);
 
-    struct object_model *curr_object_model;
-    sobj::shaded_object *curr_shaded_object;
+    struct object_model curr_object_model;
+    sobj::shaded_object curr_shaded_object;
     mat4 transform;
 
     for (int i = 1; i < num_of_objects; i++)
     {
         curr_object_model = object_models[i];
-        if (curr_object_model != nullptr)
+        if (curr_object_model.shaded_object_index  != -2)
         {
-            curr_shaded_object = shaded_objects[curr_object_model->shaded_object_index];
+            curr_shaded_object = shaded_objects[curr_object_model.shaded_object_index];
             // color arrays and drawing according to selected, picking etc.
-            glBindVertexArray(curr_shaded_object->VAO);
-            glBindBuffer(GL_ARRAY_BUFFER, curr_shaded_object->VBO);
+            glBindVertexArray(curr_shaded_object.VAO);
+            glBindBuffer(GL_ARRAY_BUFFER, curr_shaded_object.VBO);
             
             // object model matrix
-            transform = view_matrix * curr_object_model->model_matrix;
+            transform = view_matrix * curr_object_model.model_matrix;
 
             // if not picking draw objects normally
             if (with_picking == false)
@@ -581,15 +535,15 @@ void draw_objects(bool with_picking)
                 // if object not selected then just draw it solid with its own color
 
                 //FIXME: check if works, what should light_position be?
-                curr_shaded_object->display_real(transform, projection_matrix, light_position);
+                curr_shaded_object.display_real(transform, projection_matrix, light_position);
 
                 // if object is selected then also draw its wireframe with black color
-                if (curr_object_model->is_selected)
+                if (curr_object_model.is_selected)
                 {
                     //TODO: can we also draw object with GL_LINE here
 
                     // draw 3 arrows on the object
-                    draw_object_arrows(curr_object_model, with_picking);
+                    draw_object_arrows(&curr_object_model, with_picking);
                 }
             }
             // if with picking then just draw all objects with their unique picking colors
@@ -597,12 +551,12 @@ void draw_objects(bool with_picking)
             {
                 // Since shaded_objects have their own unique color but we reuse them at duplication,
                 // we need to instead change it to the current object_model's unique_color at this proces
-                curr_shaded_object->unique_color = curr_object_model->unique_id_color;
-                curr_shaded_object->display_picker(transform, projection_matrix);
+                curr_shaded_object.unique_color = curr_object_model.unique_id_color;
+                curr_shaded_object.display_picker(transform, projection_matrix);
 
                 // if object selected draw 3 arrows on the object with unique picking colors also
-                if (curr_object_model->is_selected)
-                    draw_object_arrows(curr_object_model, with_picking);
+                if (curr_object_model.is_selected)
+                    draw_object_arrows(&curr_object_model, with_picking);
             }
         }
     }
@@ -639,17 +593,17 @@ void translate_object_using_arrows(double x_pos_diff, double y_pos_diff)
     {
     case 1: // x-axis
         multiplier = find_arrow_direction(true);
-        object_models[selected_model_index]->Translation[Xaxis] += object_speed * multiplier * x_pos_diff;
+        object_models[selected_model_index].Translation[Xaxis] += object_speed * multiplier * x_pos_diff;
         break;
     
     case 2: // y-axis
         multiplier = -1;
-        object_models[selected_model_index]->Translation[Yaxis] += object_speed * multiplier * y_pos_diff;
+        object_models[selected_model_index].Translation[Yaxis] += object_speed * multiplier * y_pos_diff;
         break;
 
     case 3: // z-axis
         multiplier = find_arrow_direction(false);
-        object_models[selected_model_index]->Translation[Zaxis] += object_speed * multiplier * x_pos_diff;
+        object_models[selected_model_index].Translation[Zaxis] += object_speed * multiplier * x_pos_diff;
         break;
     }
 }
@@ -661,17 +615,17 @@ void rotate_object_using_arrows(double x_pos_diff, double y_pos_diff)
     {
     case 1: // x-axis (red arrow)
         multiplier = find_arrow_direction(true);
-        object_models[selected_model_index]->Theta[Xaxis] = multiplier * y_pos_diff;  
+        object_models[selected_model_index].Theta[Xaxis] = multiplier * y_pos_diff;  
         break;
     
     case 2: // y-axis (green arrow)
         multiplier = -1 * find_arrow_direction(false);
-        object_models[selected_model_index]->Theta[Yaxis] = multiplier * x_pos_diff;  
+        object_models[selected_model_index].Theta[Yaxis] = multiplier * x_pos_diff;  
         break;
 
     case 3: // z-axis (blue arrow)
         multiplier = -1 * find_arrow_direction(true);
-        object_models[selected_model_index]->Theta[Zaxis] = multiplier * x_pos_diff;  
+        object_models[selected_model_index].Theta[Zaxis] = multiplier * x_pos_diff;  
         break;
     }
 }
@@ -681,9 +635,9 @@ void scale_object_using_arrows(double y_pos_diff)
     if (object_arrow_selected_axis != 2) //if not y-axis
         return;
 
-    object_models[selected_model_index]->Scaling[Xaxis] += 0.01 * -y_pos_diff;
-    object_models[selected_model_index]->Scaling[Yaxis] += 0.01 * -y_pos_diff;
-    object_models[selected_model_index]->Scaling[Zaxis] += 0.01 * -y_pos_diff;
+    object_models[selected_model_index].Scaling[Xaxis] += 0.01 * -y_pos_diff;
+    object_models[selected_model_index].Scaling[Yaxis] += 0.01 * -y_pos_diff;
+    object_models[selected_model_index].Scaling[Zaxis] += 0.01 * -y_pos_diff;
 }
 
 void transform_object_with_arrows(double x_diff, double y_diff)
@@ -719,11 +673,11 @@ void display()
 void update()
 {
     // only update the model matrix of the selected object
-    create_object_matrices(object_models[selected_model_index]); 
+    create_object_matrices(&object_models[selected_model_index]); 
 
-    object_models[selected_model_index]->Theta[Xaxis] = 0.0;
-    object_models[selected_model_index]->Theta[Yaxis] = 0.0;
-    object_models[selected_model_index]->Theta[Zaxis] = 0.0;
+    object_models[selected_model_index].Theta[Xaxis] = 0.0;
+    object_models[selected_model_index].Theta[Yaxis] = 0.0;
+    object_models[selected_model_index].Theta[Zaxis] = 0.0;
 }
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
@@ -802,9 +756,9 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
         if (0 <= index-1 && index-1 < num_of_objects)
         {
             selected_action = NoAction;
-            object_models[selected_model_index]->is_selected = false;
+            object_models[selected_model_index].is_selected = false;
             selected_model_index = index-1;
-            object_models[selected_model_index]->is_selected = true;
+            object_models[selected_model_index].is_selected = true;
             std::cout << "Selected model index: " << selected_model_index << " model is: " << object_models[selected_model_index] << "\n";
         }
         // if object arrows selected
