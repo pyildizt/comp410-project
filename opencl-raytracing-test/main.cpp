@@ -23,6 +23,8 @@ Today's goal is to visualize a simple triangle with no lighting
 #define NUM_PIXELS_Y 256
 #define OUT_BUFFER_LEN (NUM_PIXELS_X * NUM_PIXELS_Y)
 
+#define ICOUNT 50
+
 typedef unsigned char uchar;
 
 //-----------------------PNG-----------------------------
@@ -119,18 +121,12 @@ typedef struct {
 } Vector2D_array;
 
 typedef struct {
-  Vector3D array[50 * 50];
+  Vector3D array[ICOUNT * ICOUNT];
   int number_of_elements;
 } Vector3D_array;
 
 typedef struct {
-  double spectrum[(int)(((700 - 380) / 5 + 1))];
-  int number_of_elements;
-
-} spectrum_of_light;
-
-typedef struct {
-  spectrum_of_light surface_spectrum;
+  vec3 color;
   double diffusion_coefficient;
 
 } surface;
@@ -162,7 +158,7 @@ typedef struct {
 typedef struct {
   Vector3D ray_current_coordinates;
   Vector3D ray_direction;
-  spectrum_of_light ray_spectrum;
+  vec3 ray_color;
   int recursion_index;
 
 } ray;
@@ -170,15 +166,6 @@ typedef struct {
 Vector3D normalize(Vector3D v) {
   double length = sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
   return (Vector3D){v.x / length, v.y / length, v.z / length};
-}
-
-void add_second_spectrum_to_first_one(spectrum_of_light *s1,
-                                      spectrum_of_light s2);
-void add_second_spectrum_to_first_one(spectrum_of_light *s1,
-                                      spectrum_of_light s2) {
-  for (int i = 0; i < s1->number_of_elements; i++) {
-    s1->spectrum[i] += s2.spectrum[i];
-  }
 }
 
 Vector3D give_the_normal_of_a_triangle(ray_tracer::triangle input);
@@ -466,11 +453,11 @@ int randomIntInRange(int n, int m, uint *seed) {
 }
 
 int fitness_checker(Vector2D current_point, Vector2D *location_array, int rows,
-                    int cols, int background_array[50][50], double length,
+                    int cols, int background_array[ICOUNT][ICOUNT], double length,
                     double width, int m, int n, double r,
                     double tek_kare_uzunluk);
 int fitness_checker(Vector2D current_point, Vector2D *location_array, int rows,
-                    int cols, int background_array[50][50], double length,
+                    int cols, int background_array[ICOUNT][ICOUNT], double length,
                     double width, int m, int n, double r,
                     double tek_kare_uzunluk) {
   if (current_point.x > 0 && current_point.x < length && current_point.y > 0 &&
@@ -520,7 +507,7 @@ Vector2D_array random_points_giver(double width, double length,
   int n = my_ceil(length / tek_kare_uzunluk);
   int m = my_ceil(width / tek_kare_uzunluk);
 
-  int background_array[50][50];
+  int background_array[ICOUNT][ICOUNT];
 
   for (int i = 0; i < m; i++) {
     for (int j = 0; j < n; j++) {
@@ -543,8 +530,8 @@ Vector2D_array random_points_giver(double width, double length,
   // Vector2D active_array[n*m];
   // Vector2D location_array[n*m];
 
-  Vector2D active_array[50 * 50];
-  Vector2D location_array[50 * 50];
+  Vector2D active_array[ICOUNT * ICOUNT];
+  Vector2D location_array[ICOUNT * ICOUNT];
 
   active_array[active_array_current_index] = initial_random_vector;
   location_array[location_array_index] = initial_random_vector;
@@ -753,44 +740,14 @@ double gamma_correct(double value) {
     return 1.055 * pow((float)value, (float)(1 / 2.4)) - 0.055;
   }
 }
-void spectral_to_rgb(double *spd, double *wavelengths, int length, int *R,
-                     int *G, int *B);
-void spectral_to_rgb(double *spd, double *wavelengths, int length, int *R,
-                     int *G, int *B) {
-  // Convert the spectral distribution to XYZ
-  double X, Y, Z;
-  spectral_to_xyz(spd, wavelengths, length, &X, &Y, &Z);
 
-  // Convert XYZ to linear RGB
-  double rgb_linear[3];
-  xyz_to_rgb(X, Y, Z, &rgb_linear[0], &rgb_linear[1], &rgb_linear[2]);
-
-  // Apply gamma correction
-  double rgb_corrected[3];
-  for (int i = 0; i < 3; ++i) {
-    rgb_corrected[i] = gamma_correct(rgb_linear[i]);
-  }
-
-  // Clamp and scale to [0, 255]
-
-  *R = (int)(fmax((float)0.0, fmin((float)1.0, (float)rgb_corrected[0])) * 255);
-  *G = (int)(fmax((float)0.0, fmin((float)1.0, (float)rgb_corrected[1])) * 255);
-  *B = (int)(fmax((float)0.0, fmin((float)1.0, (float)rgb_corrected[2])) * 255);
-}
-
-// ray tracing computations are below
-spectrum_of_light compute_the_ray(ray current_ray, surface_array *all_surfaces,
-                                  triangle_array *all_faces,
-                                  Vector3D light_position, double light_radius,
-                                  uint *seed, int max_recursion);
-spectrum_of_light compute_the_ray(ray current_ray, surface_array *all_surfaces,
-                                  triangle_array *all_faces,
-                                  Vector3D light_position, double light_radius,
-                                  uint *seed, int max_recursion) {
+vec3 compute_the_ray(ray current_ray, surface_array *all_surfaces,
+                     triangle_array *all_faces, Vector3D light_position,
+                     double light_radius, uint *seed, int max_recursion) {
 
   if (current_ray.recursion_index + 1 > max_recursion) {
 
-    return current_ray.ray_spectrum;
+    return current_ray.ray_color; // current_ray.ray_color;
   }
 
   int triangle_index = -1;
@@ -816,51 +773,34 @@ spectrum_of_light compute_the_ray(ray current_ray, surface_array *all_surfaces,
   // it directly intersects with the light
 
   if (distance_to_light <= light_radius && distance_to_light >= 0) {
-
-    return current_ray.ray_spectrum;
+    return current_ray.ray_color;
   }
 
   if (triangle_index == -1) {
-    spectrum_of_light zero_one;
-    zero_one.number_of_elements = (700 - 380) / 5 + 1;
-    for (int y = 0; y < zero_one.number_of_elements; y++) {
-      zero_one.spectrum[y] = 0;
-    }
-    return zero_one;
+    return vec3(0, 0, 0);
   }
 
   ray new_ray_specular;
-  spectrum_of_light spectrum_of_current_ray;
-  spectrum_of_current_ray.number_of_elements = (700 - 380) / 5 + 1;
 
   int surface_index = all_faces->all_triangles[triangle_index].surface_number;
 
-  for (int o = 0; o < spectrum_of_current_ray.number_of_elements; o++) {
-    double a1 = current_ray.ray_spectrum.spectrum[o];
-    surface a2 = all_surfaces->surface_array[surface_index];
-    double a3 = a2.surface_spectrum.spectrum[o];
-    double a4 =
-        (1 -
-         (all_surfaces->surface_array[surface_index]).diffusion_coefficient);
+  vec3 a1 = current_ray.ray_color;
+  surface a2 = all_surfaces->surface_array[surface_index];
+  vec3 a3 = a2.color;
+  double a4 =
+      (1 - (all_surfaces->surface_array[surface_index]).diffusion_coefficient);
 
-    spectrum_of_current_ray.spectrum[o] = a1 * a3 * a4;
-  }
-  new_ray_specular.ray_spectrum = spectrum_of_current_ray;
+  new_ray_specular.ray_color = a1 * a3 * a4;
 
   ray new_ray_diffusion;
-  spectrum_of_light spectrum_of_current_ray2;
-  spectrum_of_current_ray2.number_of_elements = (700 - 380) / 5 + 1;
 
-  for (int o = 0; o < spectrum_of_current_ray2.number_of_elements; o++) {
-    double a1 = current_ray.ray_spectrum.spectrum[o];
-    surface a2 = all_surfaces->surface_array[surface_index];
-    double a3 = a2.surface_spectrum.spectrum[o];
-    double a4 =
-        ((all_surfaces->surface_array[surface_index]).diffusion_coefficient);
-    spectrum_of_current_ray2.spectrum[o] = a1 * a3 * a4;
-  }
+  a1 = current_ray.ray_color;
+  ;
+  a2 = all_surfaces->surface_array[surface_index];
+  a3 = a2.color;
+  a4 = ((all_surfaces->surface_array[surface_index]).diffusion_coefficient);
+  new_ray_diffusion.ray_color = a1 * a3 * a4;
 
-  new_ray_diffusion.ray_spectrum = spectrum_of_current_ray2;
   Vector3D new_location = find_intersection_of_a_triangle_with_a_ray(
       current_ray, all_faces->all_triangles[triangle_index]);
   Vector3D new_specular_direction = give_specular_direction(
@@ -877,14 +817,14 @@ spectrum_of_light compute_the_ray(ray current_ray, surface_array *all_surfaces,
   new_ray_specular.recursion_index = current_ray.recursion_index + 1;
   new_ray_diffusion.recursion_index = current_ray.recursion_index + 1;
 
-  spectrum_of_light specular_spectrum =
+  vec3 specular_spectrum =
       compute_the_ray(new_ray_specular, all_surfaces, all_faces, light_position,
                       light_radius, seed, max_recursion);
-  spectrum_of_light diffusive_spectrum =
+  vec3 diffusive_spectrum =
       compute_the_ray(new_ray_diffusion, all_surfaces, all_faces,
                       light_position, light_radius, seed, max_recursion);
 
-  add_second_spectrum_to_first_one(&specular_spectrum, diffusive_spectrum);
+  specular_spectrum += diffusive_spectrum;
 
   return specular_spectrum;
 }
@@ -897,11 +837,7 @@ RGB trace(int which_pixel_x_coord, int which_pixel_y_coord,
           Vector3D light_position, double light_radius, int max_recursion) {
   uint our_random_number = (uint)random_number_generator_seed;
 
-  spectrum_of_light resultant_spectrum;
-  resultant_spectrum.number_of_elements = (700 - 380) / 5 + 1;
-  for (int t = 0; t < resultant_spectrum.number_of_elements; t++) {
-    resultant_spectrum.spectrum[t] = 0.0;
-  }
+  vec3 resultant_spectrum;
 
   Vector2D_array to_be_returned =
       random_points_giver(camera_plane_y_width / ((double)(number_of_y_pixels)),
@@ -920,56 +856,50 @@ RGB trace(int which_pixel_x_coord, int which_pixel_y_coord,
                                        ((double)(number_of_y_pixels)) -
                                    (camera_plane_y_width / 2));
 
+  int num_samples = 80;
+  for(int s = 0; s < 20; s++){
   for (int i = 0; i < final_plane.number_of_elements; i++) {
 
     ray current_ray;
     current_ray.recursion_index = 0;
-    spectrum_of_light spectrum_of_current_ray;
-    spectrum_of_current_ray.number_of_elements = (700 - 380) / 5 + 1;
-    // initialize the white light
+    current_ray.ray_color = vec3(1, 1, 1);
 
-    for (int o = 0; o < spectrum_of_current_ray.number_of_elements; o++) {
-      spectrum_of_current_ray.spectrum[o] = (double)1;
-    }
-    current_ray.ray_spectrum = spectrum_of_current_ray;
     current_ray.ray_direction = copy_given3d(
         final_plane.array[i]); // The COP is assumed to be at the origin
     current_ray.ray_current_coordinates = copy_given3d(final_plane.array[i]);
 
-    spectrum_of_light the_new_spectrum =
+    vec3 the_new_spectrum =
         compute_the_ray(current_ray, all_surfaces, all_faces, light_position,
                         light_radius, &our_random_number, max_recursion);
 
-    add_second_spectrum_to_first_one(&resultant_spectrum, the_new_spectrum);
+    resultant_spectrum += the_new_spectrum;
   }
-
-  for (int j = 0; j < resultant_spectrum.number_of_elements; j++) {
-    resultant_spectrum.spectrum[j] /= (double)final_plane.number_of_elements;
   }
+  resultant_spectrum /= (((double)final_plane.number_of_elements) * ((double)num_samples));
 
   // code to convert the final resultant light spectrum into rgb values
   int length = (int)((700 - 380) / 5 + 1);
   double wavelengths[length];
   double spd[length];
 
-  for (int i = 0; i < length; ++i) {
-    wavelengths[i] =
-        380 + 5 * i; // Example wavelengths from 380nm to 780nm in 5nm steps
-    spd[i] = resultant_spectrum.spectrum[i];
-    if (spd[i] != 0.0) {
-      // printf("spectrum %f \n",spd[i]);
-    }
-  }
+  // for (int i = 0; i < length; ++i) {
+  //   wavelengths[i] =
+  //       380 + 5 * i; // Example wavelengths from 380nm to 780nm in 5nm steps
+  //   spd[i] = resultant_spectrum.spectrum[i];
+  //   if (spd[i] != 0.0) {
+  //     // printf("spectrum %f \n",spd[i]);
+  //   }
+  // }
 
-  int R, G, B;
+  // int R, G, B;
 
-  spectral_to_rgb(spd, wavelengths, length, &R, &G, &B);
+  // spectral_to_rgb(spd, wavelengths, length, &R, &G, &B);
   // printf("RGB: (%d, %d, %d)\n", R, G, B);
 
   RGB colour;
-  colour.R = (uchar)R;
-  colour.G = (uchar)G;
-  colour.B = (uchar)B;
+  colour.R = (uchar)(resultant_spectrum.x * 255.0);
+  colour.G = (uchar)(resultant_spectrum.y * 255.0);
+  colour.B = (uchar)(resultant_spectrum.z * 255.0);
 
   return colour;
 }
@@ -989,25 +919,6 @@ void RGBtoXYZ(int R, int G, int B, double *X, double *Y, double *Z) {
   *X = r * 0.4124564 + g * 0.3575761 + b * 0.1804375;
   *Y = r * 0.2126729 + g * 0.7151522 + b * 0.0721750;
   *Z = r * 0.0193339 + g * 0.1191920 + b * 0.9503041;
-}
-void XYZToSpectrum(double X, double Y, double Z, spectrum_of_light *spec) {
-  // Constants for the Gaussian centers for R, G, B (just an example)
-  const double lambdaR = 560; // Peak for Red
-  const double lambdaG = 530; // Peak for Green
-  const double lambdaB = 460; // Peak for Blue
-
-  const double sigma = 20; // Width of the Gaussian
-
-  for (int i = 0; i < spec->number_of_elements; i++) {
-    double lambda = 380 + i * 5;
-    // Compute the Gaussian contributions for each component
-    double r = exp(-0.5 * pow((lambda - lambdaR) / sigma, 2));
-    double g = exp(-0.5 * pow((lambda - lambdaG) / sigma, 2));
-    double b = exp(-0.5 * pow((lambda - lambdaB) / sigma, 2));
-
-    // Combine the Gaussians weighted by the XYZ components (simplified model)
-    spec->spectrum[i] = r * X + g * Y + b * Z;
-  }
 }
 
 #define NUM_COLORS 3
@@ -1193,39 +1104,9 @@ const double blueSpectrum[] = {
     0.00, // 580 nm
     0.00, // 585 nm
     0.00, // 590 nm
-    0.00,
-    0.00,
-    0.00,
-    0.00,
-    0.00,
-    0.00,
-    0.00,
-    0.00,
-    0.00,
-    0.00,
-    0.00,
-    0.00,
-    0.00,
-    0.00,
-    0.00,
-    0.00,
-    0.00,
-    0.00,
-    0.00,
-    0.00,
-    0.00,
-    0.00,
-    0.00,
+    0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00,
+    0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00,
 };
-
-
-void RGBToSpectrum(double R, double G, double B, spectrum_of_light *spec) {
-  for (int i = 0; i < spec->number_of_elements; i++) {
-    spec->spectrum[i] = (R * redSpectrum[i]) +
-                        (G * greenSpectrum[i]) +
-                        (B * blueSpectrum[i]);
-  }
-}
 
 ///--------------------------------------------------------------
 void load_model(model m, model **modelp, surface *all_surfaces,
@@ -1250,13 +1131,14 @@ void load_json_scene(const std::string filepath, surface *all_surfaces,
 
   scene _scene = to_scene(sscene);
   std::cout << "number of models: " << _scene.models.size() << std::endl;
-  //TODO set to 1
+  // TODO set to 1
   for (int i = 1; i < _scene.models.size(); i++) {
     model m = _scene.models[i];
     model *modelp;
     std::cout << (m.triangles[0].p0) << std::endl;
     load_model(m, &modelp, all_surfaces, current_surface_index, all_triangles,
-               current_triangle_index, Translate(0,0,-1)*_scene.view * _scene.transforms[i],
+               current_triangle_index,
+               Translate(0, 0, -1) * _scene.view * _scene.transforms[i],
                identity());
   }
 }
@@ -1264,7 +1146,7 @@ void load_json_scene(const std::string filepath, surface *all_surfaces,
 void load_model(model m, model **modelp, surface *all_surfaces,
                 int *current_surface_index, triangle_array *all_triangles,
                 int *current_triangle_index, mat4 Transform, mat4 Projection) {
-                // invert_normals(&m);
+  // invert_normals(&m);
   model *new_model = (model *)calloc(1, sizeof(model));
   new_model->material.diffuse = m.material.diffuse;
   new_model->material.shininess = m.material.shininess;
@@ -1274,29 +1156,26 @@ void load_model(model m, model **modelp, surface *all_surfaces,
   }
 
   all_surfaces[*current_surface_index].diffusion_coefficient =
-      1.0 / (1.0 + (new_model->material.shininess / 50.0));
+      //1.0 / (1.0 + (new_model->material.shininess / 50.0));
+      0.1;
   printf("coeff: %.2f \n",
          all_surfaces[*current_surface_index].diffusion_coefficient);
-  all_surfaces[*current_surface_index].surface_spectrum.number_of_elements = 65;
 
   double xyz_linear[3];
   // RGBtoXYZ(new_model->material.diffuse.x * 255,
   //          new_model->material.diffuse.y * 255,
-  //          new_model->material.diffuse.z * 255, &xyz_linear[0], &xyz_linear[1],
-  //          &xyz_linear[2]);
+  //          new_model->material.diffuse.z * 255, &xyz_linear[0],
+  //          &xyz_linear[1], &xyz_linear[2]);
   // std::cout << "xyz: " << xyz_linear[0] << " " << xyz_linear[1] << " "
   //           << xyz_linear[2] << std::endl;
   // XYZToSpectrum(xyz_linear[0], xyz_linear[1], xyz_linear[2],
   //               &(all_surfaces[*current_surface_index].surface_spectrum));
   // try yellow
-  new_model->material.diffuse = vec4(1, 1, 0, 1);
+  // new_model->material.diffuse = vec4(1, 1, 0, 1);
 
-  // set spectrum to zero
-  for (int i = 0; i < all_surfaces[*current_surface_index].surface_spectrum.number_of_elements; i++) {
-    all_surfaces[*current_surface_index].surface_spectrum.spectrum[i] = 0;
-  }
-
-  RGBToSpectrum(1, 0, 1, &(all_surfaces[*current_surface_index].surface_spectrum));
+  all_surfaces[*current_surface_index].color.x = new_model->material.diffuse.x;
+  all_surfaces[*current_surface_index].color.y = new_model->material.diffuse.y;
+  all_surfaces[*current_surface_index].color.z = new_model->material.diffuse.z;
 
   for (auto t : new_model->triangles) {
     t.p0 = Projection * Transform * t.p0;
@@ -1420,8 +1299,11 @@ int main() {
   light_position.x = 3.0;
   light_position.y = 0.0;
   light_position.z = 0.0;
- 
-  load_json_scene("/home/emrgncr/Documents/repos/comp410/comp410-project/scene_builder/mushroom.json", (all_surfaces.surface_array), &surface_index, &all_tris, &tri_index, &light_position);
+
+  load_json_scene("/home/emrgncr/Documents/repos/comp410/comp410-project/"
+                  "scene_builder/mushroom.json",
+                  (all_surfaces.surface_array), &surface_index, &all_tris,
+                  &tri_index, &light_position);
 
   uchar *outc = (uchar *)calloc(OUT_BUFFER_LEN * 4, sizeof(uchar));
 
@@ -1435,8 +1317,6 @@ int main() {
             << all_tris.all_triangles[0].coordinates3.x << " "
             << all_tris.all_triangles[0].coordinates3.y << " "
             << all_tris.all_triangles[0].coordinates3.z << " " << std::endl;
-
-
 
   ray exp;
   Vector3D e = {0.0, 0.01, 1.0};

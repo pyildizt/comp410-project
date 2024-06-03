@@ -8,9 +8,7 @@
 #include "png_utils.hpp"
 #include "simple_windowing.hpp"
 #include "vec.h"
-#ifndef __APPLE__
-  #include <GL/gl.h>
-#endif
+#include <GL/gl.h>
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
@@ -99,9 +97,6 @@ GLfloat cameraXrotacc = 0.0;
 
 GLuint _width;
 GLuint _height;
-
-GLfloat scalerw;
-GLfloat scalerh;
 
 // We want camera to be able to rotate around the origin, with certain distance
 
@@ -228,12 +223,12 @@ void init_buffers() {
 
 void setup_texture() {
   auto texture_path = main_model.material.texture_path;
-  if (texture_path == "") {
+  if (strlen(texture_path) < 1) {
     return;
   }
 
   int width, height;
-  uvTexture::textureLocation = loadPNG(texture_path.c_str(), &width, &height);
+  uvTexture::textureLocation = loadPNG(texture_path, &width, &height);
 
   std::cout << width << " " << height << std::endl;
 
@@ -391,12 +386,9 @@ void display_model(bool fake) {
   glVertexAttribPointer(modelUVPoint, 4, GL_FLOAT, GL_FALSE, 0,
                         BUFFER_OFFSET((sizeof(vec4) * len_verts * 2) +
                                       (sizeof(GLfloat) * 2 * len_verts)));
-  // glViewport(object_window.get_x_offset() * scalerw, object_window.get_y_offset() * scalerh,
-  //            object_window.get_absolute_width() * scalerw,
-  //            object_window.get_absolute_height() * scalerh);
-  glViewport(0, 0,
-             _width,
-             _height);
+  glViewport(object_window.get_x_offset(), object_window.get_y_offset(),
+             object_window.get_absolute_width(),
+             object_window.get_absolute_height());
   glDrawArrays(GL_TRIANGLES, 0, MODEL_NUM_VERTICES);
 }
 
@@ -487,8 +479,8 @@ void display_uv_edit(bool fake) {
                         BUFFER_OFFSET((sizeof(vec4) * len_verts) +
                                       (sizeof(vec4) * len_verts) +
                                       (sizeof(GLfloat) * len_verts * 2)));
-  glViewport(uv_window.get_x_offset() * scalerw, uv_window.get_y_offset() * scalerh,
-             uv_window.get_absolute_width() * scalerw, uv_window.get_absolute_height() * scalerh);
+  glViewport(uv_window.get_x_offset(), uv_window.get_y_offset(),
+             uv_window.get_absolute_width(), uv_window.get_absolute_height());
   glDrawArrays(GL_TRIANGLES, 0, MODEL_NUM_VERTICES);
 }
 
@@ -506,7 +498,7 @@ void display_uv_image_square(bool fake) {
   glEnableVertexAttribArray(uvTexture::vPosition);
   glVertexAttribPointer(uvTexture::vPosition, 4, GL_FLOAT, GL_FALSE, 0,
                         BUFFER_OFFSET(0));
-  glViewport(uv_window.get_x_offset() * scalerw, uv_window.get_y_offset() * scalerh,
+  glViewport(uv_window.get_x_offset(), uv_window.get_y_offset(),
              uv_window.get_absolute_width(), uv_window.get_absolute_height());
   glDrawArrays(GL_TRIANGLES, 0, 6);
 }
@@ -519,7 +511,7 @@ void display(bool fake) {
     display_model(fake);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    // display_uv_image_square(fake);
+    display_uv_image_square(fake);
     display_uv_edit(fake);
     glDisable(GL_BLEND);
   }
@@ -734,7 +726,7 @@ GLfloat dotp(vec4 a, vec4 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
 void scroll_callback(GLFWwindow *window, double xoffset, double yoffset) {
   // get window size
   int width, height;
-  glfwGetFramebufferSize(window, &width, &height);
+  glfwGetWindowSize(window, &width, &height);
   // get cursor position
   double xpos, ypos;
   glfwGetCursorPos(window, &xpos, &ypos);
@@ -752,7 +744,7 @@ void scroll_callback(GLFWwindow *window, double xoffset, double yoffset) {
 void mouse_key_callback(GLFWwindow *window, int button, int action, int mods) {
   if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE) {
     int width, height;
-    glfwGetFramebufferSize(window, &width, &height);
+    glfwGetWindowSize(window, &width, &height);
     double xpos, ypos;
     glfwGetCursorPos(window, &xpos, &ypos);
     if (!(object_window.is_point_in(xpos, ypos) ||
@@ -951,14 +943,6 @@ void on_window_resize(GLFWwindow *window, GLint width, GLint height) {
   main_window.height.regular.value = height;
   main_window.width.regular.value = width;
 
-  printf("w: %d, h: %d\n", width, height);
-  int a, b, _w, _h;
-    glfwGetFramebufferSize(window, &a, &b);
-    glfwGetWindowSize(window, &_w, &_h);
-
-    scalerw = (float) _w / (float) a;
-    scalerh = (float) _h / (float) b;
-
   GLfloat aspectRatio =
       object_window.get_absolute_width() / object_window.get_absolute_height();
   // std::cout << width << " " << height << " " << aspectRatio << std::endl;
@@ -1136,7 +1120,6 @@ int main(int argc, char **argv) {
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
   glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-  glfwWindowHint(GLFW_RESIZABLE, GL_TRUE);
 
   GLFWwindow *window = glfwCreateWindow(500, 500, "Rubix Cube", NULL, NULL);
   glfwMakeContextCurrent(window);
@@ -1162,7 +1145,7 @@ int main(int argc, char **argv) {
   glfwSetMouseButtonCallback(window, mouse_key_callback);
   glfwSetCursorPosCallback(window, cursor_pos_callback);
   glfwSetScrollCallback(window, scroll_callback);
-  glfwSetFramebufferSizeCallback(window, on_window_resize);
+  glfwSetWindowSizeCallback(window, on_window_resize);
 
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
@@ -1193,11 +1176,11 @@ int main(int argc, char **argv) {
     }
     display(false);
 
-
-
-    ImGui::SetNextWindowPos(ImVec2(simple_ui_window.get_x_offset() * scalerw, 0));
+    int width, height;
+    glfwGetWindowSize(window, &width, &height);
+    ImGui::SetNextWindowPos(ImVec2(simple_ui_window.get_x_offset(), 0));
     ImGui::SetNextWindowSize(
-        ImVec2(simple_ui_window.get_absolute_width() * scalerw, _height * scalerh));
+        ImVec2(simple_ui_window.get_absolute_width(), height));
     ImGui::Begin("Button Window", nullptr,
                  ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                      ImGuiWindowFlags_NoMove |
@@ -1264,7 +1247,8 @@ int main(int argc, char **argv) {
       static char filename3[256] = "";
       ImGui::InputText("File path:", filename3, sizeof(filename3));
       if (ImGui::Button("Load Texture")) {
-        main_model.material.texture_path = filename3;
+        // main_model.material.texture_path = filename3;
+        strcpy(main_model.material.texture_path, filename3);
         setup_texture();
       }
       ImGui::EndChild();
