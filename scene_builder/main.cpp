@@ -472,7 +472,7 @@ void init()
 {
     // Load shaders and use the resulting shader program
     program = InitShader("vshader_phong.glsl", "fshader_phong.glsl");
-    picker_program = InitShader(".vshader_picker.glsl", "fshader_picker.glsl");
+    picker_program = InitShader("vshader_picker.glsl", "fshader_picker.glsl");
     glUseProgram(program);
 
     // Create cube, sphere, pointLight, arrow shaded_objects
