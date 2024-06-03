@@ -1,6 +1,7 @@
 #include "Angel.h"
 #include "data_types.hpp"
 #include "load_model.hpp"
+#include "mat.h"
 #include "shaded_object.hpp"
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
@@ -468,7 +469,7 @@ struct scene convert_to_scene()
                     scene.models.push_back(curr_shaded_object->inner_model);
 
                     // add object transform matrix to scene transforms
-                    scene.transforms.push_back(curr_object_model->model_matrix);
+                    scene.transforms.push_back(curr_object_model->model_matrix * Scale(.1, .1, .1));
                 }
             }
             else if (curr_object_model->object_type == PointLight)
