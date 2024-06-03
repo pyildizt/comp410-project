@@ -6,6 +6,20 @@
 #include <utility>
 #include <vector>
 
+mat4 to_mat4(serializable_mat4 s){
+    return mat4(to_vec4(s.c0), to_vec4(s.c1), to_vec4(s.c2), to_vec4(s.c3));
+}
+
+serializable_mat4 to_serializable_mat4(mat4 m){
+    struct serializable_mat4 ret = serializable_mat4();
+    ret.c0 = to_serializable_vec4(m[0]);
+    ret.c1 = to_serializable_vec4(m[1]);
+    ret.c2 = to_serializable_vec4(m[2]);
+    ret.c3 = to_serializable_vec4(m[3]);
+    return ret;
+}
+
+
 vec4 to_vec4(serializable_vec4 s){
     return vec4(s.x, s.y, s.z, s.w);
 }
@@ -77,6 +91,35 @@ serializable_material_properties to_serializable_material_properties(material_pr
     return ret;
 }
 
+scene to_scene(serializable_scene s){
+    struct scene ret = scene();
+    ret.models = std::vector<model>();
+    for(auto m : s.models){
+        ret.models.push_back(to_model(m));
+    }
+    ret.transforms = std::vector<mat4>();
+    for(auto m : s.transforms){
+        ret.transforms.push_back(to_mat4(m));
+    }
+    ret.view = to_mat4(s.view);
+    ret.scene_light = to_light(s.scene_light);
+    return ret;
+}
+serializable_scene to_serializable_scene(scene s){
+    struct serializable_scene ret = serializable_scene();
+    ret.models = std::vector<serializable_model>();
+    for(auto m : s.models){
+        ret.models.push_back(to_serializable_model(m));
+    }
+    ret.transforms = std::vector<serializable_mat4>();
+    for(auto m : s.transforms){
+        ret.transforms.push_back(to_serializable_mat4(m));
+    }
+    ret.view = to_serializable_mat4(s.view);
+    ret.scene_light = to_serializable_light(s.scene_light);
+    return ret;
+}
+
 model to_model(serializable_model s){
     struct model ret = model();
     ret.material = to_material_properties(s.material);
@@ -95,6 +138,30 @@ serializable_model to_serializable_model(model m){
     }
     return ret;
 }
+
+light to_light(serializable_light s){
+    struct light ret = light();
+    ret.position = to_vec4(s.position);
+    ret.ambient = to_vec4(s.ambient);
+    ret.diffuse = to_vec4(s.diffuse);
+    ret.specular = to_vec4(s.specular);
+    ret.constant = s.constant;
+    ret.linear = s.linear;
+    ret.quadratic = s.quadratic;
+    return ret;
+}
+serializable_light to_serializable_light(light l){
+    struct serializable_light ret = serializable_light();
+    ret.position = to_serializable_vec4(l.position);
+    ret.ambient = to_serializable_vec4(l.ambient);
+    ret.diffuse = to_serializable_vec4(l.diffuse);
+    ret.specular = to_serializable_vec4(l.specular);
+    ret.constant = l.constant;
+    ret.linear = l.linear;
+    ret.quadratic = l.quadratic;
+    return ret;
+}
+
 
 
 std::string model_to_json(model m){

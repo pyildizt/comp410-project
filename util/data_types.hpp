@@ -21,6 +21,19 @@ struct serializable_vec4 {
                               JSON_PROPERTY(z), JSON_PROPERTY(w))
 };
 
+struct serializable_mat4 {
+  serializable_vec4 c0;
+  serializable_vec4 c1;
+  serializable_vec4 c2;
+  serializable_vec4 c3;
+
+  ZAX_JSON_SERIALIZABLE_BASIC(JSON_PROPERTY(c0), JSON_PROPERTY(c1),
+                              JSON_PROPERTY(c2), JSON_PROPERTY(c3))
+};
+
+mat4 to_mat4(serializable_mat4 s);
+serializable_mat4 to_serializable_mat4(mat4 m);
+
 struct serializable_vec2 {
   float x;
   float y;
@@ -146,11 +159,99 @@ struct model {
   bool is_empty() { return triangles.size() == 0; }
 };
 
+struct light{
+  vec4 position;
+  vec4 ambient;
+  vec4 diffuse;
+  vec4 specular;
+  float constant;
+  float linear;
+  float quadratic;
+
+  light(){
+    position = vec4(0.0, 0.0, 0.0, 1.0);
+    ambient = vec4(0.2, 0.2, 0.2, 1.0);
+    diffuse = vec4(0.5, 0.5, 0.5, 1.0);
+    specular = vec4(1.0, 1.0, 1.0, 1.0);
+    constant = 1.0;
+    linear = 0.09;
+    quadratic = 0.032;
+  }
+};
+
+
+struct serializable_light{
+  serializable_vec4 position;
+  serializable_vec4 ambient;
+  serializable_vec4 diffuse;
+  serializable_vec4 specular;
+  float constant;
+  float linear;
+  float quadratic;
+
+  ZAX_JSON_SERIALIZABLE_BASIC(JSON_PROPERTY(position), JSON_PROPERTY(ambient),
+                              JSON_PROPERTY(diffuse), JSON_PROPERTY(specular),
+                              JSON_PROPERTY(constant), JSON_PROPERTY(linear),
+                              JSON_PROPERTY(quadratic))
+};
+
+
+struct scene{
+  std::vector<model> models;
+  std::vector<mat4> transforms;
+  mat4 view;
+  light scene_light;
+};
+
+struct serializable_scene{
+  std::vector<serializable_model> models;
+  std::vector<serializable_mat4> transforms;
+  serializable_mat4 view;
+  serializable_light scene_light;
+
+  ZAX_JSON_SERIALIZABLE(serializable_scene, JSON_PROPERTY(models),
+                        JSON_PROPERTY(transforms), JSON_PROPERTY(view),
+                        JSON_PROPERTY(scene_light))
+};
+
+scene to_scene(serializable_scene s);
+serializable_scene to_serializable_scene(scene s);
+
 model to_model(serializable_model s);
 serializable_model to_serializable_model(model m);
 
 std::string model_to_json(model m);
 model json_to_model(std::string json);
+
+light to_light(serializable_light s);
+serializable_light to_serializable_light(light l);
+
+
+enum ObjectType {Cube, Sphere, Imported, PointLight, Empty};
+enum {Xaxis = 0, Yaxis = 1, Zaxis = 2, NumAxes = 3};
+struct object_model
+{
+    enum ObjectType object_type;
+    bool is_selected;
+    int shaded_object_index;
+    vec4 unique_id_color;
+    vec3 object_coordinates;
+    mat4 model_matrix;
+    mat4 rotation_matrix;
+    GLfloat Theta[NumAxes];
+    GLfloat Scaling[NumAxes];
+    GLfloat Translation[NumAxes];
+
+    friend std::ostream& operator<<(std::ostream& os, const object_model& obj) {
+        os << "is_selected: " << obj.is_selected << ", object_type: " << obj.object_type << 
+            ", coords: (" << obj.object_coordinates.x << ", " << obj.object_coordinates.y << 
+            ", " << obj.object_coordinates.z << ")";
+        return os;
+    }
+};
+
+
+
 
 /**
  * @brief Converts a vector of triangles to a point array to be used in opengl.
