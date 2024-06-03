@@ -32,11 +32,11 @@
 #define SHADER_EDITOR_EXE_PATH "../shader_editor/shader_editor"
 
 #define CUBE_PATH "../test/cube.json"
-#define SPHERE_PATH "../test/tetrahedron.json"
-#define POINTLIGHT_PATH "../test/tetrahedron.json" //FIXME: smaller yellow sphere
-#define ARROW_PATH_1 "../test/arrow.json"
-#define ARROW_PATH_2 "../test/arrow.json" //FIXME: different colored arrows
-#define ARROW_PATH_3 "../test/arrow.json"
+#define SPHERE_PATH "../test/sphere.json"
+#define POINTLIGHT_PATH "../test/sphere.json"
+#define ARROW_PATH_1 "../test/arrow_red.json"
+#define ARROW_PATH_2 "../test/arrow_green.json"
+#define ARROW_PATH_3 "../test/arrow_blue.json"
 
 typedef vec4 color4;
 typedef vec4 point4;
@@ -82,8 +82,7 @@ std::map<std::string, GLuint> texturePointers;
 GLuint program, picker_program;
 mat4 view_matrix, projection_matrix;
 mat4 arrow_model_matrices[3];
-vec4 light_position(1.0, 1.0, 1.0, 1.0); // light position for the shaded_object.display_real function
-// TODO: light poisiton might be tweaked
+vec4 light_position(4.0, 4.0, 4.0, 1.0); // light position for the shaded_object.display_real function
 
 enum SelectedAction {NoAction, TranslateObject, ScaleObject, RotateObject};
 SelectedAction selected_action = NoAction;
@@ -120,7 +119,7 @@ void create_object_matrices(struct object_model *obj)
             // PointLight cannot be scaled or rotated
             if (obj->object_type == PointLight)
             {
-                obj->model_matrix = Translate(translation);
+                obj->model_matrix = Translate(translation) * Scale(0.2, 0.2, 0.2);
             }
             else
             {
@@ -142,25 +141,27 @@ void create_object_matrices(struct object_model *obj)
             if (obj->object_type == PointLight)
                 distance_from_object = 0.05f;
                 
+            float arrow_scaler = 0.7f;
+            vec3 arrow_scaler_vec = vec3(arrow_scaler, arrow_scaler, arrow_scaler);
             switch (selected_action)
             {
             case NoAction:
                 break;
             
             case TranslateObject:
-                arrow_model_matrices[0] = Translate(translation) * Translate(distance_from_object, 0, 0) * RotateZ(-90.0f);
-                arrow_model_matrices[1] = Translate(translation) * Translate(0, distance_from_object, 0);
-                arrow_model_matrices[2] = Translate(translation) * Translate(0, 0, distance_from_object) * RotateX(90.0f);
+                arrow_model_matrices[0] = Translate(translation) * Translate(distance_from_object, 0, 0) * RotateZ(-90.0f) * Scale(arrow_scaler_vec);
+                arrow_model_matrices[1] = Translate(translation) * Translate(0, distance_from_object, 0) * Scale(arrow_scaler_vec);
+                arrow_model_matrices[2] = Translate(translation) * Translate(0, 0, distance_from_object) * RotateX(90.0f) * Scale(arrow_scaler_vec);
                 break;
 
             case ScaleObject:
-                arrow_model_matrices[1] = Translate(translation) * Translate(0, distance_from_object, 0);
+                arrow_model_matrices[1] = Translate(translation) * Translate(0, distance_from_object, 0) * Scale(arrow_scaler_vec);
                 break;
 
             case RotateObject:
-                arrow_model_matrices[0] = Translate(translation) * Translate(distance_from_object, 0, 0);
-                arrow_model_matrices[1] = Translate(translation) * Translate(0, 0, distance_from_object) * RotateZ(-90.0f);
-                arrow_model_matrices[2] = Translate(translation) * Translate(0, distance_from_object, 0) * RotateZ(-90.0f);
+                arrow_model_matrices[0] = Translate(translation) * Translate(distance_from_object, 0, 0) * Scale(arrow_scaler_vec);
+                arrow_model_matrices[1] = Translate(translation) * Translate(0, 0, distance_from_object) * RotateZ(-90.0f) * Scale(arrow_scaler_vec);
+                arrow_model_matrices[2] = Translate(translation) * Translate(0, distance_from_object, 0) * RotateZ(-90.0f) * Scale(arrow_scaler_vec);
                 break;
             }
         }
@@ -244,6 +245,7 @@ struct object_model add_object(ObjectType obj_type, const char *filename)
 
     case PointLight:
         obj.shaded_object_index = 2;
+        obj.model_matrix = Translate(0.0, 0.0, inital_z_placement) * Scale(0.2, 0.2, 0.2);
         break;
 
     case Imported:
@@ -487,7 +489,7 @@ void open_shader_editor()
     delete_selected_object();
     
     // call shader_editor with temp.json file
-    system("../shader_editor/shader_editor temp.json"); //FIXME:
+    system("../shader_editor/shader_editor temp.json");
 }
 
 void import_from_shader_editor()
@@ -512,6 +514,7 @@ void init()
     projection_matrix = Perspective(fovy, aspect_ratio, 0.1, 15.5);
 
     glEnable( GL_DEPTH_TEST );
+    glEnable(GL_CULL_FACE);
     glClearColor( 1.0, 1.0, 1.0, 1.0 ); 
 
     // allocate memory for shaded_objects array containing pointers to all shaded_objects
@@ -529,7 +532,7 @@ void init()
     // create first empty object, this will be selected when background is clicked 
     empty_object = add_object(Empty, "");
     // also create the point light object as a small yellow sphere
-    pointLight_object = add_object(PointLight, POINTLIGHT_PATH); //FIXME: LOAD OBJECT GIVES ERROR
+    pointLight_object = add_object(PointLight, POINTLIGHT_PATH);
 }
 
 void draw_objects(bool with_picking)
@@ -559,15 +562,11 @@ void draw_objects(bool with_picking)
             if (with_picking == false)
             {
                 // if object not selected then just draw it solid with its own color
-
-                //FIXME: check if works, what should light_position be?
                 curr_shaded_object.display_real(transform, projection_matrix, light_position);
 
                 // if object is selected then also draw object arrows
                 if (curr_object_model.is_selected)
                 {
-                    //TODO: can we also draw object with GL_LINE here
-
                     // draw 3 arrows on the object
                     draw_object_arrows(&curr_object_model, with_picking);
                 }
@@ -979,6 +978,7 @@ int main(int argc, char *argv[])
         ImGui::BeginChild("Transform Object Box", ImVec2(-1, 200), true,
                         ImGuiWindowFlags_HorizontalScrollbar);
 
+        /*
         if (is_shader_editor_open) 
         {
             ImGui::BeginDisabled();
@@ -1015,6 +1015,7 @@ int main(int argc, char *argv[])
                 is_shader_editor_open = false;
             }
         }
+        */
 
         if (ImGui::Button("Duplicate Object"))
         {

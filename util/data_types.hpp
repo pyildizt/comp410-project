@@ -243,9 +243,9 @@ struct object_model
     GLfloat Translation[NumAxes];
 
     friend std::ostream& operator<<(std::ostream& os, const object_model& obj) {
+        vec3 coords = obj.object_coordinates + vec3(obj.Translation[Xaxis], obj.Translation[Yaxis], obj.Translation[Zaxis]);
         os << "is_selected: " << obj.is_selected << ", object_type: " << obj.object_type << 
-            ", coords: (" << obj.object_coordinates.x << ", " << obj.object_coordinates.y << 
-            ", " << obj.object_coordinates.z << ")";
+            ", coords: (" << coords.x << ", " << coords.y << ", " << coords.z << ")";
         return os;
     }
 };
