@@ -11,6 +11,9 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <algorithm>
+
+
 #if defined(__linux__) || defined(_WIN32)
     #include <GL/gl.h>
 #elif defined(__APPLE__)

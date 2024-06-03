@@ -2,8 +2,8 @@
 
 out vec4 FragColor;
 
-uniform vec4 PickerFakeColorPointer;
+uniform vec4 pColor;
 
 void main() {
-    FragColor = PickerFakeColorPointer;
+    FragColor = pColor;
 }

@@ -1,10 +1,11 @@
 #version 410
 
-in vec4 position;
+in vec4 vPosition;
 
-uniform mat4 PickerProjectionPointer;
-uniform mat4 PickerTransformPointer;
+uniform mat4 Projection;
+uniform mat4 Transform;
+uniform vec4 pColor; // unique color for picking
 
 void main() {
-    gl_Position = PickerProjectionPointer * PickerTransformPointer * position;
+    gl_Position = Projection * Transform * vPosition;
 }
