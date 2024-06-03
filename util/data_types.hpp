@@ -232,7 +232,9 @@ enum {Xaxis = 0, Yaxis = 1, Zaxis = 2, NumAxes = 3};
 struct object_model
 {
     enum ObjectType object_type;
+    bool is_selected;
     int shaded_object_index;
+    vec4 unique_id_color;
     vec3 object_coordinates;
     mat4 model_matrix;
     mat4 rotation_matrix;
@@ -240,26 +242,10 @@ struct object_model
     GLfloat Scaling[NumAxes];
     GLfloat Translation[NumAxes];
 
-    // GLuint vao;
-    // GLuint buffer;
-    // int vertices_num;
-
-    // vec4 *points_array;
-    // vec4 *colors_array;
-    // vec4 *picking_colors_array;
-    // vec4 unique_id_color;
-    // vec4 *normals;
-    // vec4 *uv_coords;
-
-    bool is_selected;
-
     friend std::ostream& operator<<(std::ostream& os, const object_model& obj) {
         os << "is_selected: " << obj.is_selected << ", object_type: " << obj.object_type << 
             ", coords: (" << obj.object_coordinates.x << ", " << obj.object_coordinates.y << 
-            ", " << obj.object_coordinates.z 
-            // << "), v_num: " << obj.vertices_num << ", id_color: (" << obj.unique_id_color.x <<
-            //", " << obj.unique_id_color.y << ", " << obj.unique_id_color.z 
-            << ")";
+            ", " << obj.object_coordinates.z << ")";
         return os;
     }
 };
