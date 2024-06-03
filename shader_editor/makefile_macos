@@ -9,9 +9,16 @@ INCDIR := ../include
 IMGUI_DIR := ../extern/imgui-1.90.5
 
 # Compiler flags
-CXXFLAGS := -std=c++11 -I$(INCDIR) -I$(UTILDIR) -I$(ZAXDIR) -I$(IMGUI_DIR) -I$(IMGUI_DIR)/backends -ggdb
+CXXFLAGS := -std=c++11 -g $(shell pkg-config --cflags-only-other glfw3 glew libpng)
 
-LDFLAGS := -lGLEW -lGL -lglfw -lpng
+# Include directories
+INCLUDES = -I$(INCDIR) -I$(UTILDIR) -I$(ZAXDIR) -I$(IMGUI_DIR) -I$(IMGUI_DIR)/backends $(shell pkg-config --cflags-only-I glfw3 glew libpng)
+
+# Include MACOS frameworks
+FRAMEWORKS = -framework OpenGL -framework Cocoa -framework IOKit
+
+# Libraries
+LIBS = $(shell pkg-config --libs glfw3 glew libpng)
 
 # Source files
 SRCS := $(wildcard $(SRCDIR)/*.cpp) $(wildcard $(UTILDIR)/*.cpp) $(wildcard $(ZAXDIR)/*.cpp)
@@ -22,7 +29,7 @@ SRCS += $(IMGUI_DIR)/backends/imgui_impl_glfw.cpp $(IMGUI_DIR)/backends/imgui_im
 OBJS := $(SRCS:.cpp=.o)
 
 # Executable name
-EXEC := scene_builder
+EXEC := shader_editor
 
 .PHONY: all clean
 
@@ -31,18 +38,12 @@ all: $(EXEC)
 
 # Linking
 $(EXEC): $(OBJS)
-	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LIBS) $(FRAMEWORKS)
 
 # Compiling
 %.o: %.cpp
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-rutil:
-	rm -f $(UTILDIR)/*.o
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
 # Clean
 clean:
 	rm -f $(OBJS) $(EXEC)
-
-run: $(EXEC)
-	./$(EXEC)

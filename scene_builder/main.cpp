@@ -42,6 +42,7 @@ typedef vec4 color4;
 typedef vec4 point4;
 
 bool display_picking = false;
+bool is_shader_editor_open = false;
 
 /* CAMERA */
 bool left_click_holding = false;
@@ -110,16 +111,16 @@ void create_object_matrices(struct object_model *obj)
     {
         if (obj->object_type != Empty)
         {
+            vec3 translation;
             mat4 rotation_matrix = mat4(1.0f);
             mat4 scaling_matrix = mat4(1.0f);
 
-            // TODO: changed this but did not check it
-            obj->object_coordinates += vec3(obj->Translation[Xaxis], obj->Translation[Yaxis], obj->Translation[Zaxis]);
+            translation = obj->object_coordinates + vec3(obj->Translation[Xaxis], obj->Translation[Yaxis], obj->Translation[Zaxis]);
 
             // PointLight cannot be scaled or rotated
             if (obj->object_type == PointLight)
             {
-                obj->model_matrix = Translate(obj->object_coordinates);
+                obj->model_matrix = Translate(translation);
             }
             else
             {
@@ -133,7 +134,7 @@ void create_object_matrices(struct object_model *obj)
                 
                 // This is to make rotation around fixed global axes
                 obj->rotation_matrix = rotation_matrix * obj->rotation_matrix;
-                obj->model_matrix = Translate(obj->object_coordinates) * obj->rotation_matrix * scaling_matrix;
+                obj->model_matrix = Translate(translation) * obj->rotation_matrix * scaling_matrix;
             }
 
             // make matrices of x, y, z arrows respectively
@@ -147,19 +148,19 @@ void create_object_matrices(struct object_model *obj)
                 break;
             
             case TranslateObject:
-                arrow_model_matrices[0] = Translate(obj->object_coordinates) * Translate(distance_from_object, 0, 0) * RotateZ(-90.0f);
-                arrow_model_matrices[1] = Translate(obj->object_coordinates) * Translate(0, distance_from_object, 0);
-                arrow_model_matrices[2] = Translate(obj->object_coordinates) * Translate(0, 0, distance_from_object) * RotateX(90.0f);
+                arrow_model_matrices[0] = Translate(translation) * Translate(distance_from_object, 0, 0) * RotateZ(-90.0f);
+                arrow_model_matrices[1] = Translate(translation) * Translate(0, distance_from_object, 0);
+                arrow_model_matrices[2] = Translate(translation) * Translate(0, 0, distance_from_object) * RotateX(90.0f);
                 break;
 
             case ScaleObject:
-                arrow_model_matrices[1] = Translate(obj->object_coordinates) * Translate(0, distance_from_object, 0);
+                arrow_model_matrices[1] = Translate(translation) * Translate(0, distance_from_object, 0);
                 break;
 
             case RotateObject:
-                arrow_model_matrices[0] = Translate(obj->object_coordinates) * Translate(distance_from_object, 0, 0);
-                arrow_model_matrices[1] = Translate(obj->object_coordinates) * Translate(0, 0, distance_from_object) * RotateZ(-90.0f);
-                arrow_model_matrices[2] = Translate(obj->object_coordinates) * Translate(0, distance_from_object, 0) * RotateZ(-90.0f);
+                arrow_model_matrices[0] = Translate(translation) * Translate(distance_from_object, 0, 0);
+                arrow_model_matrices[1] = Translate(translation) * Translate(0, 0, distance_from_object) * RotateZ(-90.0f);
+                arrow_model_matrices[2] = Translate(translation) * Translate(0, distance_from_object, 0) * RotateZ(-90.0f);
                 break;
             }
         }
@@ -328,7 +329,7 @@ struct object_model *duplicate_selected_object()
     std::copy_n(old_obj.Translation, 3, new_obj.Translation);
 
     // add object to object_models array
-    object_models[num_of_objects-1] = old_obj;
+    object_models[num_of_objects-1] = new_obj;
     std::cout << "Object #" << (num_of_objects-1) << " duplicated: " << (object_models[num_of_objects-1]) << std::endl;
 
     // Select new object
@@ -344,7 +345,8 @@ void delete_selected_object()
     if (obj.object_type == Empty || obj.object_type == PointLight)
         return;
 
- 
+    obj.object_type = Empty;
+
     // also remove object from object_models array but do not change num_of_objects
     object_models[selected_model_index].shaded_object_index = -2;
 
@@ -445,8 +447,9 @@ struct scene convert_to_scene()
                     // This is an object so change it to light and give that to the scene
                     // We only need the position information from this object
                     struct light light;
-                    light.position = vec4(curr_object_model.object_coordinates.x, 
-                        curr_object_model.object_coordinates.y, curr_object_model.object_coordinates.z, 1.0);
+                    vec3 light_position = curr_object_model.object_coordinates + vec3(0.0, 0.0, inital_z_placement);
+                    light_position += vec3(curr_object_model.Translation[Xaxis], curr_object_model.Translation[Yaxis], curr_object_model.Translation[Zaxis]);
+                    light.position = vec4(light_position.x, light_position.y, light_position.z, 1.0);
                     scene.scene_light = light;
                 }
             }
@@ -469,6 +472,30 @@ void export_current_scene_as_json(char *filename)
     std::cout << "Scene saved in file " << filename << std::endl;
 }
 
+void open_shader_editor()
+{
+    if (selected_model_index == 0)
+        return;
+
+    // save model as json file
+    serializable_model to_save = to_serializable_model(shaded_objects[object_models[selected_model_index].shaded_object_index].inner_model);
+    std::ofstream file("temp.json");
+    file << to_save.zax_to_json();
+    file.close();
+
+    // delete object, it will then be reimported
+    delete_selected_object();
+    
+    // call shader_editor with temp.json file
+    system("../shader_editor/shader_editor temp.json"); //FIXME:
+}
+
+void import_from_shader_editor()
+{
+    add_object(Imported, "temp.json");
+    system("rm temp.json");
+}
+
 // create objects, vertex arrays and buffers
 void init()
 {
@@ -478,7 +505,7 @@ void init()
     glUseProgram(program);
 
     // Create cube, sphere, pointLight, arrow shaded_objects
-    create_basic_objects(); //FIXME: LOAD OBJECT GIVES ERROR
+    create_basic_objects();
 
     // Create projection matrix
     GLfloat aspect_ratio = (GLfloat) SCREEN_WIDTH / (GLfloat) SCREEN_HEIGHT;
@@ -502,8 +529,7 @@ void init()
     // create first empty object, this will be selected when background is clicked 
     empty_object = add_object(Empty, "");
     // also create the point light object as a small yellow sphere
-    // pointLight_object = add_object(PointLight, POINTLIGHT_PATH); //FIXME: LOAD OBJECT GIVES ERROR
-    add_object(Cube, "");
+    pointLight_object = add_object(PointLight, POINTLIGHT_PATH); //FIXME: LOAD OBJECT GIVES ERROR
 }
 
 void draw_objects(bool with_picking)
@@ -537,7 +563,7 @@ void draw_objects(bool with_picking)
                 //FIXME: check if works, what should light_position be?
                 curr_shaded_object.display_real(transform, projection_matrix, light_position);
 
-                // if object is selected then also draw its wireframe with black color
+                // if object is selected then also draw object arrows
                 if (curr_object_model.is_selected)
                 {
                     //TODO: can we also draw object with GL_LINE here
@@ -755,7 +781,6 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
         // if an object is selected change selected_model_index
         if (0 <= index-1 && index-1 < num_of_objects)
         {
-            selected_action = NoAction;
             object_models[selected_model_index].is_selected = false;
             selected_model_index = index-1;
             object_models[selected_model_index].is_selected = true;
@@ -954,12 +979,43 @@ int main(int argc, char *argv[])
         ImGui::BeginChild("Transform Object Box", ImVec2(-1, 200), true,
                         ImGuiWindowFlags_HorizontalScrollbar);
 
-        if (ImGui::Button("Edit object in Shader Editor"))
+        if (is_shader_editor_open) 
         {
-            // TODO: this requires shader_editor shaders to have "../shader_editor/vhsader.glsl" etc.
-            system("../shader_editor/shader_editor");
-            // TODO: Also how do we give model information to shader_editor??
+            ImGui::BeginDisabled();
+            if (ImGui::Button("Edit object in Shader Editor") && !is_shader_editor_open) 
+            {
+                open_shader_editor();
+                is_shader_editor_open = true;
+            }
+            ImGui::EndDisabled();
         }
+        else
+        {
+           if (ImGui::Button("Edit object in Shader Editor") && !is_shader_editor_open) 
+            {
+                open_shader_editor();
+                is_shader_editor_open = true;
+            } 
+        }
+        if (!is_shader_editor_open) 
+        {
+            ImGui::BeginDisabled();
+            if (ImGui::Button("Import from Shader Editor") && is_shader_editor_open) 
+            {
+                import_from_shader_editor();
+                is_shader_editor_open = false;
+            }
+            ImGui::EndDisabled();
+        }
+        else
+        {
+            if (ImGui::Button("Import from Shader Editor") && is_shader_editor_open) 
+            {
+                import_from_shader_editor();
+                is_shader_editor_open = false;
+            }
+        }
+
         if (ImGui::Button("Duplicate Object"))
         {
             duplicate_selected_object();
