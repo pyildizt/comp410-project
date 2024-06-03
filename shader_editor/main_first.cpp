@@ -8,7 +8,10 @@
 #include "png_utils.hpp"
 #include "simple_windowing.hpp"
 #include "vec.h"
-#include <GL/gl.h>
+#if defined(__linux__) || defined(_WIN32)
+    #include <GL/gl.h>
+#elif defined(__APPLE__)
+#endif
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
@@ -238,7 +241,7 @@ void setup_texture() {
 }
 
 void setup_uv_image_program() {
-  uvTexture::Program = InitShader("uv_vimage.glsl", "uv_fimage.glsl");
+  uvTexture::Program = InitShader("../shader_editor/uv_vimage.glsl", "../shader_editor/uv_fimage.glsl");
   uvTexture::vPosition = glGetAttribLocation(uvTexture::Program, "vPosition");
   uvTexture::texture = glGetUniformLocation(uvTexture::Program, "texture1");
   uvTexture::Projection =
@@ -262,8 +265,8 @@ void init(void) {
   glFrontFace(GL_CCW);
 
   // Load shaders and use the resulting shader program
-  modelShader = InitShader("vshader.glsl", "fshader.glsl");
-  uvw::Program = InitShader("uv_vshader.glsl", "uv_fshader.glsl");
+  modelShader = InitShader("../shader_editor/vshader.glsl", "../shader_editor/fshader.glsl");
+  uvw::Program = InitShader("../shader_editor/uv_vshader.glsl", "../shader_editor/uv_fshader.glsl");
   init_buffers();
   setup_uv_image_program();
 
@@ -1113,6 +1116,12 @@ void invert_model_normals() {
 //----------------------------------------------------------------------------
 
 int main(int argc, char **argv) {
+  static char temp_filename[256] = "";
+  if (argc == 2){
+    strncpy(temp_filename, argv[1], sizeof(temp_filename) - 1);
+    temp_filename[sizeof(temp_filename) - 1] = '\0';
+  }
+
   if (!glfwInit())
     exit(EXIT_FAILURE);
 
@@ -1158,6 +1167,10 @@ int main(int argc, char **argv) {
   ImGui_ImplGlfw_InitForOpenGL(window, true);
 
   init();
+
+  // If file from scene_builder then load it here
+  if (argc == 2)
+    load_model_in(temp_filename);
 
   ImGui_ImplOpenGL3_Init();
 
@@ -1238,6 +1251,14 @@ int main(int argc, char **argv) {
         std::ofstream file(filename2);
         file << to_save.zax_to_json();
         file.close();
+      }
+
+      if (ImGui::Button("Back to Scene Builder")) {
+        auto to_save = to_serializable_model(main_model);
+        std::ofstream file("../scene_builder/temp.json");
+        file << to_save.zax_to_json();
+        file.close();
+        exit(EXIT_SUCCESS);
       }
 
       ImGui::EndChild();
