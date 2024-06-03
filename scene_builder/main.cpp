@@ -100,7 +100,7 @@ int object_models_size = 10;
 
 sobj::shaded_object* get_empty_object()
 {
-    sobj::shaded_object obj;
+    sobj::shaded_object obj = sobj::shaded_object();
     auto ptr = (sobj::shaded_object *) malloc(sizeof(sobj::shaded_object));
     memcpy(ptr, &obj, sizeof(sobj::shaded_object));
     return ptr;
