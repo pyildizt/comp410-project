@@ -303,6 +303,7 @@ public:
     if (PickerProgram == 0) {
       return;
     }
+    transform = transform * Scale(.1, .1, .1);
     OPGL(glUseProgram(PickerProgram));
     OPGL(glBindVertexArray(VAO));
     OPGL(glBindBuffer(GL_ARRAY_BUFFER, VBO));
