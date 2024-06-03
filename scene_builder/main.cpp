@@ -48,10 +48,7 @@ double last_mouse_pos_x = SCREEN_WIDTH / 2.0;
 double last_mouse_pos_y = SCREEN_HEIGHT / 2.0;
 double x_pos_diff;
 double y_pos_diff;
-
-// yaw is initialized to -90.0 degrees since a yaw of 0.0 results in a 
-// direction vector pointing to the right so we initially rotate a bit to the left.
-double yaw   = -90.0;	
+double yaw = -90.0;	
 double pitch =  0.0;
 double last_yaw = yaw;
 double last_pitch = pitch;
@@ -77,7 +74,8 @@ int num_of_models = 4;
 GLuint program, picker_program;
 mat4 view_matrix, projection_matrix;
 mat4 arrow_model_matrices[3];
-vec4 light_position(1.0, 1.0, 1.0, 1.0);
+vec4 light_position(1.0, 1.0, 1.0, 1.0); // light position for the shaded_object.display_real function
+// TODO: light poisiton might be tweaked
 
 enum SelectedAction {NoAction, TranslateObject, ScaleObject, RotateObject};
 SelectedAction selected_action = NoAction;
@@ -100,17 +98,16 @@ void create_object_matrices(struct object_model *obj)
     {
         if (obj->object_type != Empty)
         {
-            vec3 translation;
             mat4 rotation_matrix = mat4(1.0f);
-            mat4 scaling_matrix = mat4(1.0f);;
-            
-            translation = obj->object_coordinates + vec3(0.0, 0.0, inital_z_placement) + 
-                            vec3(obj->Translation[Xaxis], obj->Translation[Yaxis], obj->Translation[Zaxis]);
+            mat4 scaling_matrix = mat4(1.0f);
+
+            // TODO: changed this but did not check it
+            obj->object_coordinates += vec3(obj->Translation[Xaxis], obj->Translation[Yaxis], obj->Translation[Zaxis]);
 
             // PointLight cannot be scaled or rotated
             if (obj->object_type == PointLight)
             {
-                obj->model_matrix = Translate(translation);
+                obj->model_matrix = Translate(obj->object_coordinates);
             }
             else
             {
@@ -124,7 +121,7 @@ void create_object_matrices(struct object_model *obj)
                 
                 // This is to make rotation around fixed global axes
                 obj->rotation_matrix = rotation_matrix * obj->rotation_matrix;
-                obj->model_matrix = Translate(translation) * obj->rotation_matrix * scaling_matrix;
+                obj->model_matrix = Translate(obj->object_coordinates) * obj->rotation_matrix * scaling_matrix;
             }
 
             // make matrices of x, y, z arrows respectively
@@ -138,19 +135,19 @@ void create_object_matrices(struct object_model *obj)
                 break;
             
             case TranslateObject:
-                arrow_model_matrices[0] = Translate(translation) * Translate(distance_from_object, 0, 0) * RotateZ(-90.0f);
-                arrow_model_matrices[1] = Translate(translation) * Translate(0, distance_from_object, 0);
-                arrow_model_matrices[2] = Translate(translation) * Translate(0, 0, distance_from_object) * RotateX(90.0f);
+                arrow_model_matrices[0] = Translate(obj->object_coordinates) * Translate(distance_from_object, 0, 0) * RotateZ(-90.0f);
+                arrow_model_matrices[1] = Translate(obj->object_coordinates) * Translate(0, distance_from_object, 0);
+                arrow_model_matrices[2] = Translate(obj->object_coordinates) * Translate(0, 0, distance_from_object) * RotateX(90.0f);
                 break;
 
             case ScaleObject:
-                arrow_model_matrices[1] = Translate(translation) * Translate(0, distance_from_object, 0);
+                arrow_model_matrices[1] = Translate(obj->object_coordinates) * Translate(0, distance_from_object, 0);
                 break;
 
             case RotateObject:
-                arrow_model_matrices[0] = Translate(translation) * Translate(distance_from_object, 0, 0);
-                arrow_model_matrices[1] = Translate(translation) * Translate(0, 0, distance_from_object) * RotateZ(-90.0f);
-                arrow_model_matrices[2] = Translate(translation) * Translate(0, distance_from_object, 0) * RotateZ(-90.0f);
+                arrow_model_matrices[0] = Translate(obj->object_coordinates) * Translate(distance_from_object, 0, 0);
+                arrow_model_matrices[1] = Translate(obj->object_coordinates) * Translate(0, 0, distance_from_object) * RotateZ(-90.0f);
+                arrow_model_matrices[2] = Translate(obj->object_coordinates) * Translate(0, distance_from_object, 0) * RotateZ(-90.0f);
                 break;
             }
         }
@@ -188,7 +185,7 @@ void draw_object_arrows(struct object_model *obj, bool with_picking)
 // Add object button function, if obj_type == Imported then filename string "exmaple.json" with path must be provided
 struct object_model *add_object(ObjectType obj_type, const char *filename)
 {
-    // If filename is incorrect then give error and return
+    // If obj_type == Imported and filename is incorrect then give error and return
     if (obj_type == Imported)
     {
         std::ifstream file2(filename);
@@ -223,7 +220,7 @@ struct object_model *add_object(ObjectType obj_type, const char *filename)
 
     // initialize object_model variables
     obj->object_type = obj_type;
-    obj->object_coordinates = vec3(0.0f, 0.0f, 0.0f);
+    obj->object_coordinates = vec3(0.0, 0.0, inital_z_placement);
     obj->model_matrix = Translate(0.0, 0.0, inital_z_placement);
     obj->rotation_matrix = mat4(1.0f);
     std::fill_n(obj->Theta, 3, 0.0f);
@@ -235,6 +232,7 @@ struct object_model *add_object(ObjectType obj_type, const char *filename)
     // initialize other varibles depending on object type
     switch (obj_type)
     {
+    // If objects are cube, sphere then no need to load new model
     case Cube:
         obj->shaded_object_index = 0;
         break;
@@ -286,9 +284,11 @@ struct object_model *add_object(ObjectType obj_type, const char *filename)
     // if not empty then give programs and also create unique color
     if (obj_type != Empty)
     {
+        obj->unique_id_color = INT_TO_UNIQUE_COLOR(num_of_objects + 4); // 0: Empty, 1-3: reserved for arrows so +4
+
         shaded_obj->Program = program;
         shaded_obj->PickerProgram = picker_program;
-        shaded_obj->unique_color = INT_TO_UNIQUE_COLOR(num_of_objects + 4);
+        shaded_obj->unique_color = obj->unique_id_color;
     }
 
     // add object to object_models array
@@ -331,6 +331,7 @@ struct object_model *duplicate_selected_object()
         return nullptr;
 
     // Point to original shaded_object (index in shaded_objects array)
+    // Since no need to import shaded object when only new matrices are enough to draw it again
     new_obj->shaded_object_index = old_obj->shaded_object_index;
     
     // Duplicate object information
@@ -409,13 +410,10 @@ void create_basic_objects()
     arrow_shaded_objects[2]->initModel();
 }
 
-// exports scene as json_file
-void save_scene_as_json(char *filename)
+// Convert current objects to scene struct
+struct scene convert_to_scene()
 {
-    struct serializable_scene scene;
-    struct serializable_model s_model;
-    struct serializable_light s_light;
-    struct serializable_mat4 s_matrix;
+    struct scene scene;
 
     struct object_model *curr_object_model;
     sobj::shaded_object *curr_shaded_object;
@@ -431,42 +429,50 @@ void save_scene_as_json(char *filename)
                 if (curr_shaded_object != nullptr)
                 {
                     // add object model to scene models
-                    s_model = to_serializable_model(curr_shaded_object->inner_model);
-                    scene.models.push_back(s_model);
+                    scene.models.push_back(curr_shaded_object->inner_model);
 
                     // add object transform matrix to scene transforms
-                    // TODO: this function does not exist
-                    // s_matrix = to_serializable_mat4(curr_object_model->model_matrix);
-                    // scene.transforms.push_back(s_matrix);
+                    scene.transforms.push_back(curr_object_model->model_matrix);
                 }
             }
-            // FIXME: This is point light
             else if (curr_object_model->object_type == PointLight)
             {
                 curr_shaded_object = shaded_objects[curr_object_model->shaded_object_index];
                 if (curr_shaded_object != nullptr)
                 {
-                    // TODO: this function does not exist
-                    // s_light = to_serializable_light(curr_shaded_object->inner_model);
-                    // scene.models.push_back(s_model);
+                    // This is an object so change it to light and give that to the scene
+                    // We only need the position information from this object
+                    struct light light;
+                    light.position = vec4(curr_object_model->object_coordinates.x, 
+                        curr_object_model->object_coordinates.y, curr_object_model->object_coordinates.z, 1.0);
+                    scene.scene_light = light;
                 }
             }
         }
     }
-    //TODO: add other scene stuff as well
+    // Add current view_matrix to scene
+    scene.view = view_matrix;
 
+    return scene;
+}
+
+void export_current_scene_as_json(char *filename)
+{
+    serializable_scene s_scene = to_serializable_scene(convert_to_scene());
 
     std::ofstream file(filename);
-    file << scene.zax_to_json(); //TODO: check this
+    file << s_scene.zax_to_json();
     file.close();
+
+    std::cout << "Scene saved in file " << filename << std::endl;
 }
 
 // create objects, vertex arrays and buffers
 void init()
 {
     // Load shaders and use the resulting shader program
-    program = InitShader("../util/vshader_phong.glsl", "../util/fshader_phong.glsl");
-    picker_program = InitShader("../util/vshader_phong.glsl", "../util/fshader_phong.glsl");
+    program = InitShader("vshader_phong.glsl", "fshader_phong.glsl");
+    picker_program = InitShader(".vshader_picker.glsl", "fshader_picker.glsl");
     glUseProgram(program);
 
     // Create cube, sphere, pointLight, arrow shaded_objects
@@ -504,6 +510,7 @@ void init()
 
     // create first empty object, this will be selected when background is clicked 
     empty_object = add_object(Empty, "");
+    // also create the point light object as a small yellow sphere
     // pointLight_object = add_object(PointLight, POINTLIGHT_PATH); //FIXME: LOAD OBJECT GIVES ERROR
 }
 
@@ -535,7 +542,7 @@ void draw_objects(bool with_picking)
             {
                 // if object not selected then just draw it solid with its own color
 
-                //FIXME: check if works
+                //FIXME: check if works, what should light_position be?
                 curr_shaded_object->display_real(transform, projection_matrix, light_position);
 
                 // if object is selected then also draw its wireframe with black color
@@ -550,7 +557,9 @@ void draw_objects(bool with_picking)
             // if with picking then just draw all objects with their unique picking colors
             else 
             {
-                //FIXME: check if works
+                // Since shaded_objects have their own unique color but we reuse them at duplication,
+                // we need to instead change it to the current object_model's unique_color at this proces
+                curr_shaded_object->unique_color = curr_object_model->unique_id_color;
                 curr_shaded_object->display_picker(transform, projection_matrix);
 
                 // if object selected draw 3 arrows on the object with unique picking colors also
@@ -747,7 +756,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
         unsigned char pixel[4];
         glReadPixels(xpos, ypos, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel);
         vec4 color = vec4(pixel[0] / 255.0, pixel[1] / 255.0, pixel[2] / 255.0, 1.0);
-        int index = UNIQUE_COLOR_TO_INT(color) - 4;
+        int index = UNIQUE_COLOR_TO_INT(color) - 4; // 0: Empty, 1-3: reserved for arrows so -4
 
         object_arrow_selected = false;
 
@@ -760,7 +769,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
             object_models[selected_model_index]->is_selected = true;
         }
         // if object arrows selected
-        else if (0 <= index+4 && index+4 <= 3) 
+        else if (0 <= index+4 && index+4 <= 3) // 0: Empty, 1-3: reserved for arrows so +4
         {
             object_arrow_selected = true;
             object_arrow_selected_axis = index+4; //x=1, y=2, z=3
@@ -976,7 +985,7 @@ int main(int argc, char *argv[])
         ImGui::InputText("File path", filename2, sizeof(filename2));
         if (ImGui::Button("Save Scene")) 
         {
-            save_scene_as_json(filename2); 
+            export_current_scene_as_json(filename2); 
         }
 
         ImGui::EndChild();
