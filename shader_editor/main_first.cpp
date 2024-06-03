@@ -364,7 +364,7 @@ void display_model(bool fake) {
     glUniform1f(modelIsFakeDisplay, 0);
     glUniform1i(modelIsEdge, 1);
     glUniform1i(modelHasTexture,
-                main_model.material.texture_path != "" ? 1 : 0);
+                strlen(main_model.material.texture_path) > 0 ? 1 : 0);
   } else {
     glUniform1f(modelIsFakeDisplay, 1);
     glUniform1i(modelIsEdge, 0);
