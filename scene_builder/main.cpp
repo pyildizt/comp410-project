@@ -33,7 +33,7 @@
 
 #define CUBE_PATH "../test/cube.json"
 #define SPHERE_PATH "../test/sphere.json"
-#define POINTLIGHT_PATH "../test/sphere.json"
+#define POINTLIGHT_PATH "../test/sphere_yellow.json"
 #define ARROW_PATH_1 "../test/arrow_red.json"
 #define ARROW_PATH_2 "../test/arrow_green.json"
 #define ARROW_PATH_3 "../test/arrow_blue.json"
@@ -391,6 +391,7 @@ void create_basic_objects()
     pointLight_shaded_object.Program = program;
     pointLight_shaded_object.PickerProgram = picker_program;
     pointLight_shaded_object.initModel();
+    pointLight_shaded_object.transform = Scale(0.2, 0.2, 0.2);
     printf("pointLight loaded\n");
 
     arrow_shaded_objects[0] =  get_empty_object();
@@ -562,7 +563,7 @@ void draw_objects(bool with_picking)
             if (with_picking == false)
             {
                 // if object not selected then just draw it solid with its own color
-                curr_shaded_object.display_real(transform, projection_matrix, light_position);
+                curr_shaded_object.display_real(transform, projection_matrix, view_matrix * light_position);
 
                 // if object is selected then also draw object arrows
                 if (curr_object_model.is_selected)
@@ -630,6 +631,18 @@ void translate_object_using_arrows(double x_pos_diff, double y_pos_diff)
         multiplier = find_arrow_direction(false);
         object_models[selected_model_index].Translation[Zaxis] += object_speed * multiplier * x_pos_diff;
         break;
+    }
+    if(object_models[selected_model_index].object_type == PointLight)
+    {
+        light_position = vec4(
+            //TODO check here
+            object_models[selected_model_index].object_coordinates +
+                vec3(object_models[selected_model_index].Translation[Xaxis],
+                     object_models[selected_model_index].Translation[Yaxis],
+                     object_models[selected_model_index].Translation[Zaxis]),
+            1.0);
+        light_position.w = 1.0;
+        std::cout << "Light position: " << light_position << "\n";
     }
 }
 
