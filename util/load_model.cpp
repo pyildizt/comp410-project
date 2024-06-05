@@ -7,11 +7,6 @@
 #include <string>
 #include <vector>
 
-// Allocate memory for points
-vec4 *memallocate_points_loader(int num_points) {
-  return (vec4 *)malloc(num_points * sizeof(vec4));
-}
-
 /**
  * The function `load` reads vertex and triangle data from a file, processes the
  * data, and returns an array of triangle points.
@@ -36,12 +31,12 @@ vec4 *load(const char *filename, int *tcount) {
   // Get the number of vertices and triangles
   int vertexCount, edgeCount, faceCount;
   inputFile >> vertexCount >> faceCount >> edgeCount;
-  if(faceCount == 0){
+  if (faceCount == 0) {
     faceCount = edgeCount / 3;
   }
 
   // Allocate memory for points
-  vec4 *points = memallocate_points_loader(vertexCount);
+  vec4 *points = (vec4 *)malloc(vertexCount * sizeof(vec4));
   auto triangle_points = new std::vector<vec4>();
   float max_scale = 0;
   // Read the vertices
@@ -49,7 +44,8 @@ vec4 *load(const char *filename, int *tcount) {
     float x, y, z;
     inputFile >> x >> y >> z;
     points[i] = vec4(x, y, z, 1.0);
-    max_scale = std::max(max_scale, std::max(std::abs(x), std::max(std::abs(y), std::abs(z))));
+    max_scale = std::max(
+        max_scale, std::max(std::abs(x), std::max(std::abs(y), std::abs(z))));
   }
 
   // Normalize the points
@@ -59,7 +55,7 @@ vec4 *load(const char *filename, int *tcount) {
   }
 
   // Read the triangle indices and assign the points
-  for (int i = 0; i < faceCount; i ++) {
+  for (int i = 0; i < faceCount; i++) {
     int num_verts;
     inputFile >> num_verts;
     int verts[num_verts];
@@ -67,13 +63,15 @@ vec4 *load(const char *filename, int *tcount) {
       inputFile >> verts[j];
       std::cout << verts[j] << " ";
     }
-    std::cout << " AAA " <<  std::endl;
+    std::cout << " AAA " << std::endl;
     // Skip rest of line in inputFile
     inputFile.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-    for(int j = 1; j < num_verts - 1; j++){
+    for (int j = 1; j < num_verts - 1; j++) {
       triangle_points->push_back(points[verts[0]]);
-      std::cout << vertexCount << " " << verts[j] << " " << verts[j + 1] << std::endl;
-      std::cout << vertexCount << " " << points[verts[j]] << " " << points[verts[j + 1]] << " // " << std::endl;
+      std::cout << vertexCount << " " << verts[j] << " " << verts[j + 1]
+                << std::endl;
+      std::cout << vertexCount << " " << points[verts[j]] << " "
+                << points[verts[j + 1]] << " // " << std::endl;
 
       triangle_points->push_back(points[verts[j]]);
       triangle_points->push_back(points[verts[j + 1]]);
@@ -83,7 +81,8 @@ vec4 *load(const char *filename, int *tcount) {
     *tcount = triangle_points->size() / 3;
   }
 
-  vec4* allocated_triangles = (vec4*)malloc(triangle_points->size() * sizeof(vec4));
+  vec4 *allocated_triangles =
+      (vec4 *)malloc(triangle_points->size() * sizeof(vec4));
   for (size_t i = 0; i < triangle_points->size(); i++) {
     allocated_triangles[i] = triangle_points->at(i);
   }
@@ -122,10 +121,9 @@ model load_model_with_default_material(std::vector<triangle> triangles) {
   return ret;
 }
 
-
-void renormalizeUVs(model* _model){
+void renormalizeUVs(model *_model) {
   for (int i = 0; i < _model->triangles.size(); i++) {
-    triangle* t = &_model->triangles.at(i);
+    triangle *t = &_model->triangles.at(i);
     auto uv0 = t->uv0;
     auto uv1 = t->uv1;
     auto uv2 = t->uv2;

@@ -17,6 +17,9 @@ extern GLuint WindowSeperatingLineVBO;
 extern GLuint WindowSeperatingLineTransform;
 extern GLuint WindowSeperatingLineVPosition;
 
+
+// the following comment block is written by Copilot
+//--------------------------------------------------
 const char vertex_shader[] = "#version 330 core\n"
                              "layout (location = 0) in vec4 aPos;\n"
                              "uniform mat4 transform;\n"
@@ -36,6 +39,11 @@ const vec4 window_seperating_line[] = {
     vec4(1.0, 1.0, 0.0, 1.0),   vec4(-1.0, 1.0, 0.0, 1.0),
     vec4(-1.0, -1.0, 0.0, 1.0), vec4(1.0, 1.0, 0.0, 1.0),
 };
+
+
+//--------------------------------------------------
+
+
 } // namespace swind
 
 GLuint CreateShaderProgram(const char *vertex_shader,

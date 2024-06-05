@@ -7,6 +7,7 @@ GLuint swind::WindowSeperatingLineVBO = 0;
 GLuint swind::WindowSeperatingLineTransform = 0;
 GLuint swind::WindowSeperatingLineVPosition = 0;
 
+// GPT generated code
 GLuint CreateShaderProgram(const char *vertex_shader,
                            const char *fragment_shader) {
 

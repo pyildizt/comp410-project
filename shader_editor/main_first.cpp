@@ -23,12 +23,14 @@
 #include <utility>
 #include <vector>
 
+// these functions written by github copilot
 #define INT_TO_UNIQUE_COLOR(x)                                                 \
   vec4(((GLfloat)(x & 0xFF)) / 255.0, ((GLfloat)((x >> 8) & 0xFF)) / 255.0,    \
        ((GLfloat)((x >> 16) & 0xFF)) / 255.0, 1.0)
 
 #define UNIQUE_COLOR_TO_INT(c)                                                 \
   ((int)(c.x * 255) + ((int)(c.y * 255) << 8) + ((int)(c.z * 255) << 16))
+//----------------------------
 
 enum axis { Rx, Ry, Rz };
 #define AXIS_STR(x) ((x == Rx) ? "Rx" : (x == Ry) ? "Ry" : "Rz")
@@ -403,7 +405,6 @@ mat4 getUvProjection() {
   Orthographic projection such that the smallest side is 1.0
   */
   if (aspectRatio < 1) {
-    // print all arguments to ortho
     return Ortho(-1, 1, -1.0 / aspectRatio, 1.0 / aspectRatio, -5, 5);
   } else {
     return Ortho(-1 * aspectRatio, 1.0 * aspectRatio, -1, 1, -5, 5);

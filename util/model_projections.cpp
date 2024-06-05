@@ -4,6 +4,8 @@
 #include <cmath>
 #include "limits.h"
 
+
+// written by ChatGPT
 vec2 sphereParameterization(vec3 point) {
   float u = 0.5f + (std::atan2(point.z, point.x) / (2.0f * M_PI));
   float v = 0.5f - (std::asin(point.y) / M_PI);
@@ -11,6 +13,7 @@ vec2 sphereParameterization(vec3 point) {
   return vec2(u, v);
 }
 
+// written by Copilot
 void sphericalProjection(model *model, GLfloat *selected, vec4 *normals) {
 
   // project
@@ -97,6 +100,7 @@ vec2 cubeToUV(vec3 point, int faceNumber) {
   vec2 uv;
   float u, v;
 
+  // I gave one of the cases myself, for the rest of them Copilot helped
   switch (faceNumber) {
   case 0: // Front face
     u = (point.x + 1.0f) / 2.0f;
@@ -137,6 +141,7 @@ vec2 cubeToUV(vec3 point, int faceNumber) {
   return uv;
 }
 
+// this is a long function, I took help from both Copilot and ChatGPT
 void cubeProjection(model *model, GLfloat *selected) {
   // map each point on object to a point on an imaginary cube
   // first find center of imaginary cube

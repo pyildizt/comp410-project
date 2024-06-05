@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 #include <limits>
+#include <cstdint>
 #include "../extern/zax-parser/src/ZaxJsonParser.h"
 
 struct serializable_vec4 {
@@ -242,6 +243,7 @@ struct object_model
     GLfloat Scaling[NumAxes];
     GLfloat Translation[NumAxes];
 
+    // copilot wrote
     friend std::ostream& operator<<(std::ostream& os, const object_model& obj) {
         vec3 coords = obj.object_coordinates + vec3(obj.Translation[Xaxis], obj.Translation[Yaxis], obj.Translation[Zaxis]);
         os << "is_selected: " << obj.is_selected << ", object_type: " << obj.object_type << 

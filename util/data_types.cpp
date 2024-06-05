@@ -204,6 +204,8 @@ bool _compare_vec4_ci(vec4 a, vec4 b){
     return length(a - b) < 0.001;
 }
 
+// I just write one or two lines of this
+// and the rest is written by copilot thankfully
 #define COMPARE_MAX(max_val, t)                                                \
   {                                                                            \
     if (max_val < t.p0.x) {                                                    \
@@ -266,6 +268,7 @@ bool _compare_vec4_ci(vec4 a, vec4 b){
     }                                                                          \
   }
 
+// copilot wrote this, used to hash vec4
 #define HASH_VEC4(v4, max_val, min_val)                                        \
   (((v4.x - min_val) + ((v4.y - min_val) * max_val) +                          \
     ((v4.z - min_val) * std::pow(max_val, 2))))

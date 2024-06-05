@@ -2,7 +2,7 @@
 #include <cstdio>
 #include <cstdlib>
 
-// Helper function to read PNG file, gpt generated
+// Helper function to read PNG file, GPT generated
 void readPNGFile(const char *file_name, unsigned char **image_data, int *width, int *height, int *channels) {
     FILE *fp = fopen(file_name, "rb");
     if (!fp) {
